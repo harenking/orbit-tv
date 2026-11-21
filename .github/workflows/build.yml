@@ -49,6 +49,14 @@ jobs:
           name: orbit-tv
           path: orbit-tv.apk
 
+      # Release med fast länk: .../releases/tag/senaste
+      - name: Publicera release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: senaste
+          name: Orbit TV (senaste bygget)
+          files: orbit-tv.apk
+
       # Resultatet skrivs till grenen ci-report så att det går att läsa utan inloggning på bygget
       - name: Spara rapport
         if: always()
