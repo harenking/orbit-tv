@@ -74,7 +74,6 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    InputDecoration dec(String l) => InputDecoration(labelText: l, filled: true, border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))));
     return Scaffold(
       body: Center(
         child: SizedBox(
@@ -88,11 +87,11 @@ class _LoginPageState extends State<LoginPage> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            DpadNav(child: TextField(autofocus: true, controller: _url, decoration: dec('Serveradress (t.ex. http://server.se:8080)'), keyboardType: TextInputType.url, textInputAction: TextInputAction.next)),
+            TvField(autofocus: true, controller: _url, label: 'Serveradress (t.ex. http://server.se:8080)', keyboardType: TextInputType.url, action: TextInputAction.next),
             const SizedBox(height: 12),
-            DpadNav(child: TextField(controller: _user, decoration: dec('Användarnamn'), textInputAction: TextInputAction.next)),
+            TvField(controller: _user, label: 'Användarnamn', action: TextInputAction.next),
             const SizedBox(height: 12),
-            DpadNav(child: TextField(controller: _pass, decoration: dec('Lösenord'), obscureText: true, onSubmitted: (_) => _go())),
+            TvField(controller: _pass, label: 'Lösenord', obscure: true, onSubmitted: (_) => _go()),
             const SizedBox(height: 12),
             Tv(
               onTap: () => setState(() => _agreed = !_agreed),

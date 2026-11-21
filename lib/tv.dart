@@ -105,6 +105,10 @@ class DpadNav extends StatelessWidget {
       onKeyEvent: (node, e) {
         if (e is KeyUpEvent) return KeyEventResult.ignored;
         final k = e.logicalKey;
+        if (k == LogicalKeyboardKey.select) {
+          SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+          return KeyEventResult.handled;
+        }
         if (k == LogicalKeyboardKey.arrowDown) {
           FocusScope.of(context).focusInDirection(TraversalDirection.down);
           return KeyEventResult.handled;
@@ -116,6 +120,69 @@ class DpadNav extends StatelessWidget {
         return KeyEventResult.ignored;
       },
       child: child,
+    );
+  }
+}
+
+/// Textruta för TV: tangentbordet öppnas när rutan markeras och när man trycker OK.
+class TvField extends StatefulWidget {
+  final TextEditingController controller;
+  final String label;
+  final bool obscure;
+  final bool autofocus;
+  final TextInputType? keyboardType;
+  final TextInputAction? action;
+  final void Function(String)? onSubmitted;
+  const TvField({
+    super.key,
+    required this.controller,
+    required this.label,
+    this.obscure = false,
+    this.autofocus = false,
+    this.keyboardType,
+    this.action,
+    this.onSubmitted,
+  });
+
+  @override
+  State<TvField> createState() => _TvFieldState();
+}
+
+class _TvFieldState extends State<TvField> {
+  final FocusNode _node = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _node.addListener(() {
+      if (_node.hasFocus) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _node.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DpadNav(
+      child: TextField(
+        focusNode: _node,
+        autofocus: widget.autofocus,
+        controller: widget.controller,
+        obscureText: widget.obscure,
+        keyboardType: widget.keyboardType,
+        textInputAction: widget.action,
+        onSubmitted: widget.onSubmitted,
+        style: const TextStyle(fontSize: 20),
+        decoration: InputDecoration(labelText: widget.label, filled: true, border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+      ),
     );
   }
 }
