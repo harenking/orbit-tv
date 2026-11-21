@@ -133,6 +133,8 @@ class TvField extends StatefulWidget {
   final TextInputType? keyboardType;
   final TextInputAction? action;
   final void Function(String)? onSubmitted;
+  final void Function(String)? onChanged;
+  final IconData? icon;
   const TvField({
     super.key,
     required this.controller,
@@ -142,6 +144,8 @@ class TvField extends StatefulWidget {
     this.keyboardType,
     this.action,
     this.onSubmitted,
+    this.onChanged,
+    this.icon,
   });
 
   @override
@@ -180,8 +184,9 @@ class _TvFieldState extends State<TvField> {
         keyboardType: widget.keyboardType,
         textInputAction: widget.action,
         onSubmitted: widget.onSubmitted,
+        onChanged: widget.onChanged,
         style: const TextStyle(fontSize: 20),
-        decoration: InputDecoration(labelText: widget.label, filled: true, border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+        decoration: InputDecoration(labelText: widget.label, prefixIcon: widget.icon == null ? null : Icon(widget.icon), filled: true, border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
       ),
     );
   }

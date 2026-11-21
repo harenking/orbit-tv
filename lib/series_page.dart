@@ -7,7 +7,8 @@ import 'tv.dart';
 class SeriesPage extends StatefulWidget {
   final Xtream api;
   final Item item;
-  const SeriesPage({super.key, required this.api, required this.item});
+  final bool locked;
+  const SeriesPage({super.key, required this.api, required this.item, this.locked = false});
 
   @override
   State<SeriesPage> createState() => _SeriesPageState();
@@ -43,6 +44,7 @@ class _SeriesPageState extends State<SeriesPage> {
                   key2: 'e:${e.id}',
                   poster: e.image ?? widget.item.poster,
                   kind: 'episode',
+                  locked: widget.locked,
                 )))
         .then((_) {
       if (mounted) setState(() {});

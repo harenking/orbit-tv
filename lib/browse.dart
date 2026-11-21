@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'parental.dart';
 import 'player_page.dart';
 import 'series_page.dart';
 import 'storage.dart';
@@ -16,12 +17,21 @@ class BrowsePage extends StatefulWidget {
 }
 
 class _BrowsePageState extends State<BrowsePage> {
+  @override
+  void dispose() {
+    _searchCtl.dispose();
+    super.dispose();
+  }
+
   List<Cat>? _cats;
   Cat? _cat;
   List<Item>? _items;
   String? _error;
   String _filter = '';
   int _loadToken = 0;
+  final TextEditingController _searchCtl = TextEditingController();
+  List<Cat> _vault = const [];
+  bool get _inVault => _cat?.id == Guard.vaultId;
 
   @override
   void initState() {
@@ -31,9 +41,16 @@ class _BrowsePageState extends State<BrowsePage> {
 
   Future<void> _loadCats() async {
     try {
-      final c = await widget.api.categories(widget.kind);
+      final all = await widget.api.categories(widget.kind);
       if (!mounted) return;
-      setState(() => _cats = c);
+      // Kategorier som föräldralåset gäller samlas i en enda mapp
+      final vault = all.where((c) => Guard.matches(c.name)).toList();
+      final c = all.where((x) => !vault.contains(x)).toList();
+      if (vault.isNotEmpty) c.add(const Cat(Guard.vaultId, Guard.vaultName));
+      setState(() {
+        _vault = vault;
+        _cats = c;
+      });
       if (c.isNotEmpty) _pick(c.first);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
@@ -41,14 +58,23 @@ class _BrowsePageState extends State<BrowsePage> {
   }
 
   Future<void> _pick(Cat c) async {
+    if (c.id == Guard.vaultId && !await Guard.ensure(context, title: 'Ange PIN-kod')) return;
     final token = ++_loadToken;
+    _searchCtl.clear();
     setState(() {
       _cat = c;
       _items = null;
       _filter = '';
     });
     try {
-      final it = await widget.api.items(widget.kind, c.id);
+      final List<Item> it;
+      if (c.id == Guard.vaultId) {
+        final lists = await Future.wait(_vault.map((v) => widget.api.items(widget.kind, v.id)));
+        it = [for (final l in lists) ...l];
+        it.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      } else {
+        it = await widget.api.items(widget.kind, c.id);
+      }
       if (!mounted || token != _loadToken) return;
       setState(() => _items = it);
     } catch (e) {
@@ -60,10 +86,10 @@ class _BrowsePageState extends State<BrowsePage> {
     final nav = Navigator.of(context);
     switch (it.kind) {
       case Kind.series:
-        nav.push(MaterialPageRoute(builder: (_) => SeriesPage(api: widget.api, item: it)));
+        nav.push(MaterialPageRoute(builder: (_) => SeriesPage(api: widget.api, item: it, locked: _inVault)));
       case Kind.movie:
         nav.push(MaterialPageRoute(
-            builder: (_) => PlayerPage(url: widget.api.movieUrl(it.id, it.ext), title: it.name, key2: 'm:${it.id}', poster: it.poster, kind: 'movie')));
+            builder: (_) => PlayerPage(url: widget.api.movieUrl(it.id, it.ext), title: it.name, key2: 'm:${it.id}', poster: it.poster, kind: 'movie', locked: _inVault)));
       case Kind.live:
         nav.push(MaterialPageRoute(builder: (_) => PlayerPage(url: widget.api.liveUrl(it.id), title: it.name, key2: 'l:${it.id}', poster: it.poster, live: true)));
     }
@@ -96,7 +122,7 @@ class _BrowsePageState extends State<BrowsePage> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(color: sel ? kAccent : (f ? Colors.white24 : kPanel), borderRadius: BorderRadius.circular(9)),
-                  child: Text(cat.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, color: Colors.white)),
+                  child: Text(cat.id == Guard.vaultId ? '🔒 ${cat.name}' : cat.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, color: Colors.white)),
                 ),
               ),
             );
@@ -107,13 +133,7 @@ class _BrowsePageState extends State<BrowsePage> {
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 24, 8),
-            child: DpadNav(
-              child: TextField(
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Sök i kategorin…', filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
-              style: const TextStyle(fontSize: 18),
-              onChanged: (v) => setState(() => _filter = v),
-            ),
-            ),
+            child: TvField(controller: _searchCtl, label: 'Sök i kategorin…', icon: Icons.search, onChanged: (v) => setState(() => _filter = v)),
           ),
           Expanded(
             child: _items == null

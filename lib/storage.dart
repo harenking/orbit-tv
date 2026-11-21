@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Account {
@@ -21,6 +23,7 @@ class Progress {
   final int durSec;
   final int updated;
   final String kind; // movie | episode
+  final bool locked;
   const Progress({
     required this.key,
     required this.title,
@@ -30,6 +33,7 @@ class Progress {
     required this.durSec,
     required this.updated,
     required this.kind,
+    this.locked = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -41,6 +45,7 @@ class Progress {
         'dur': durSec,
         'updated': updated,
         'kind': kind,
+        'locked': locked,
       };
 
   factory Progress.fromJson(Map<String, dynamic> j) => Progress(
@@ -52,6 +57,7 @@ class Progress {
         durSec: (j['dur'] as num).toInt(),
         updated: (j['updated'] as num).toInt(),
         kind: (j['kind'] as String?) ?? 'movie',
+        locked: (j['locked'] as bool?) ?? false,
       );
 }
 
@@ -74,6 +80,43 @@ class Store {
 
   static Future<void> saveAccount(Account a) => _p.setString('account', jsonEncode(a.toJson()));
   static Future<void> clearAccount() => _p.remove('account');
+
+
+  // ---------- Inställningar ----------
+  static int get seekStep => _p.getInt('seekStep') ?? 10;
+  static Future<void> setSeekStep(int v) => _p.setInt('seekStep', v);
+  static bool get autoResume => _p.getBool('autoResume') ?? true;
+  static Future<void> setAutoResume(bool v) => _p.setBool('autoResume', v);
+
+  static Future<void> clearProgress() => _p.remove('progress');
+
+  // ---------- Föräldralås ----------
+  static String _hash(String salt, String pin) => sha256.convert(utf8.encode('$salt:$pin')).toString();
+
+  static bool get hasPin => _p.getString('pin') != null;
+
+  static Future<void> setPin(String pin) {
+    final r = Random.secure();
+    final salt = List.generate(12, (_) => r.nextInt(36).toRadixString(36)).join();
+    return _p.setString('pin', '$salt:${_hash(salt, pin)}');
+  }
+
+  static bool verifyPin(String pin) {
+    final v = _p.getString('pin');
+    if (v == null) return true;
+    final i = v.indexOf(':');
+    if (i < 0) return false;
+    return _hash(v.substring(0, i), pin) == v.substring(i + 1);
+  }
+
+  static Future<void> removePin() => _p.remove('pin');
+
+  static List<String> get lockedCats => _p.getStringList('lockedCats') ?? const [];
+  static Future<void> setLockedCats(List<String> v) => _p.setStringList('lockedCats', v);
+  static String get keywords => _p.getString('keywords') ?? 'adult,xxx,18+,erotik,porr';
+  static Future<void> setKeywords(String v) => _p.setString('keywords', v);
+  static int get unlockMinutes => _p.getInt('unlockMinutes') ?? 15;
+  static Future<void> setUnlockMinutes(int v) => _p.setInt('unlockMinutes', v);
 
   static Map<String, Progress> _all() {
     final s = _p.getString('progress');

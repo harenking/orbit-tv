@@ -15,7 +15,8 @@ class PlayerPage extends StatefulWidget {
   final String? poster;
   final bool live;
   final String kind; // movie | episode
-  const PlayerPage({super.key, required this.url, required this.title, required this.key2, this.poster, this.live = false, this.kind = 'movie'});
+  final bool locked;
+  const PlayerPage({super.key, required this.url, required this.title, required this.key2, this.poster, this.live = false, this.kind = 'movie', this.locked = false});
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
@@ -46,7 +47,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _start() async {
-    final saved = widget.live ? null : Store.progress(widget.key2);
+    final saved = (widget.live || !Store.autoResume) ? null : Store.progress(widget.key2);
     Duration? start;
     if (saved != null && saved.posSec > 10 && saved.durSec > 0 && saved.posSec < saved.durSec * 0.95) {
       start = Duration(seconds: saved.posSec);
@@ -96,6 +97,7 @@ class _PlayerPageState extends State<PlayerPage> {
       durSec: dur,
       updated: DateTime.now().millisecondsSinceEpoch,
       kind: widget.kind,
+      locked: widget.locked,
     ));
   }
 
@@ -131,11 +133,11 @@ class _PlayerPageState extends State<PlayerPage> {
     // Längre tryck → större hopp
     final rep = e is KeyRepeatEvent;
     if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.mediaRewind) {
-      _seekBy(rep ? -30 : -10);
+      _seekBy(rep ? -Store.seekStep * 3 : -Store.seekStep);
       return KeyEventResult.handled;
     }
     if (k == LogicalKeyboardKey.arrowRight || k == LogicalKeyboardKey.mediaFastForward) {
-      _seekBy(rep ? 30 : 10);
+      _seekBy(rep ? Store.seekStep * 3 : Store.seekStep);
       return KeyEventResult.handled;
     }
     if (k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.mediaPlayPause) {

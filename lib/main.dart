@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'api.dart';
 import 'browse.dart';
+import 'parental.dart';
 import 'player_page.dart';
+import 'settings_page.dart';
 import 'storage.dart';
 import 'tv.dart';
 
@@ -118,7 +120,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-enum Section { cont, movies, series, live }
+enum Section { cont, movies, series, live, settings }
 
 class HomePage extends StatefulWidget {
   final Xtream api;
@@ -149,27 +151,32 @@ class _HomePageState extends State<HomePage> {
         body = BrowsePage(key: const ValueKey('s'), api: widget.api, kind: Kind.series);
       case Section.live:
         body = BrowsePage(key: const ValueKey('l'), api: widget.api, kind: Kind.live);
+      case Section.settings:
+        body = SettingsPage(api: widget.api, onLogout: _logout);
     }
     return Scaffold(
       body: SafeArea(
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 16, 32, 12),
-            child: Row(children: [
-              const Icon(Icons.public, color: kAccent, size: 32),
-              const SizedBox(width: 10),
-              const Text('Orbit', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
-              const SizedBox(width: 32),
-              TvButton(label: 'Fortsätt titta', selected: _tab == Section.cont, autofocus: true, onTap: () => setState(() => _tab = Section.cont)),
-              const SizedBox(width: 10),
-              TvButton(label: 'Filmer', selected: _tab == Section.movies, onTap: () => setState(() => _tab = Section.movies)),
-              const SizedBox(width: 10),
-              TvButton(label: 'Serier', selected: _tab == Section.series, onTap: () => setState(() => _tab = Section.series)),
-              const SizedBox(width: 10),
-              TvButton(label: 'Live', selected: _tab == Section.live, onTap: () => setState(() => _tab = Section.live)),
-              const Spacer(),
-              TvButton(label: 'Logga ut', icon: Icons.logout, onTap: _logout),
-            ]),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [
+                const Icon(Icons.public, color: kAccent, size: 32),
+                const SizedBox(width: 10),
+                const Text('Orbit', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
+                const SizedBox(width: 24),
+                TvButton(label: 'Fortsätt titta', selected: _tab == Section.cont, autofocus: true, onTap: () => setState(() => _tab = Section.cont)),
+                const SizedBox(width: 8),
+                TvButton(label: 'Filmer', selected: _tab == Section.movies, onTap: () => setState(() => _tab = Section.movies)),
+                const SizedBox(width: 8),
+                TvButton(label: 'Serier', selected: _tab == Section.series, onTap: () => setState(() => _tab = Section.series)),
+                const SizedBox(width: 8),
+                TvButton(label: 'Live', selected: _tab == Section.live, onTap: () => setState(() => _tab = Section.live)),
+                const SizedBox(width: 8),
+                TvButton(label: 'Inställningar', icon: Icons.settings, selected: _tab == Section.settings, onTap: () => setState(() => _tab = Section.settings)),
+              ]),
+            ),
           ),
           Expanded(child: body),
         ]),
@@ -200,9 +207,12 @@ class _ContinuePageState extends State<ContinuePage> {
       itemCount: list.length,
       itemBuilder: (c, i) {
         final p = list[i];
+        final hide = p.locked && Guard.active && !Guard.unlocked;
         return Tv(
           onTap: () async {
-            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlayerPage(url: p.url, title: p.title, key2: p.key, poster: p.poster, kind: p.kind)));
+            if (hide && !await Guard.ensure(context)) return;
+            if (!context.mounted) return;
+            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlayerPage(url: p.url, title: p.title, key2: p.key, poster: p.poster, kind: p.kind, locked: p.locked)));
             if (mounted) setState(() {});
           },
           builder: (c, f) => ClipRRect(
@@ -211,7 +221,7 @@ class _ContinuePageState extends State<ContinuePage> {
               color: kPanel,
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Expanded(child: Stack(fit: StackFit.expand, children: [
-                  posterImage(p.poster),
+                  posterImage(hide ? null : p.poster),
                   Align(
                     alignment: Alignment.bottomCenter,
                     child: LinearProgressIndicator(value: (p.posSec / p.durSec).clamp(0.0, 1.0), minHeight: 6, color: kAccent, backgroundColor: Colors.black54),
@@ -219,7 +229,7 @@ class _ContinuePageState extends State<ContinuePage> {
                 ])),
                 Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Text('${p.title}\n${fmtTime(p.posSec)} av ${fmtTime(p.durSec)}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: Colors.white)),
+                  child: Text('${hide ? Guard.mask(p.title) : p.title}\n${fmtTime(p.posSec)} av ${fmtTime(p.durSec)}', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: Colors.white)),
                 ),
               ]),
             ),
