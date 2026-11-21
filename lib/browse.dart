@@ -107,10 +107,12 @@ class _BrowsePageState extends State<BrowsePage> {
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 24, 8),
-            child: TextField(
+            child: DpadNav(
+              child: TextField(
               decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Sök i kategorin…', filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
               style: const TextStyle(fontSize: 18),
               onChanged: (v) => setState(() => _filter = v),
+            ),
             ),
           ),
           Expanded(

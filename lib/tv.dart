@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 const kAccent = Color(0xFF7C5CFF);
 const kBg = Color(0xFF0B0D17);
@@ -88,4 +89,33 @@ Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover
   final ph = Container(width: w, height: h, color: Colors.white10, child: const Center(child: Icon(Icons.movie_outlined, color: Colors.white24, size: 40)));
   if (url == null || !url.startsWith('http')) return ph;
   return Image.network(url, width: w, height: h, fit: fit, errorBuilder: (_, __, ___) => ph, loadingBuilder: (c, child, p) => p == null ? child : ph);
+}
+
+/// Låter upp/ner på fjärrkontrollen flytta markeringen även när en textruta har fokus
+/// (textrutor "äter" annars piltangenterna).
+class DpadNav extends StatelessWidget {
+  final Widget child;
+  const DpadNav({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (node, e) {
+        if (e is KeyUpEvent) return KeyEventResult.ignored;
+        final k = e.logicalKey;
+        if (k == LogicalKeyboardKey.arrowDown) {
+          FocusScope.of(context).focusInDirection(TraversalDirection.down);
+          return KeyEventResult.handled;
+        }
+        if (k == LogicalKeyboardKey.arrowUp) {
+          FocusScope.of(context).focusInDirection(TraversalDirection.up);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: child,
+    );
+  }
 }
