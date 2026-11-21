@@ -1,0 +1,70 @@
+name: Bygg APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # Android-mappen genereras här (den ligger inte i projektet)
+      - name: Skapa Android-projekt
+        run: flutter create --platforms=android --org se.orbit --project-name orbit_tv .
+
+      - name: Anpassa för Android TV
+        run: python3 tool/patch_android.py
+
+      - run: flutter pub get 2>&1 | tee pub.txt
+
+      - name: Analysera koden
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings > analyze.txt 2>&1 || true
+
+      - name: Bygg APK
+        run: |
+          set -o pipefail
+          flutter build apk --release --target-platform android-arm,android-arm64 2>&1 | tee build.txt
+
+      - name: Döp om APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk orbit-tv.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orbit-tv
+          path: orbit-tv.apk
+
+      # Resultatet skrivs till grenen ci-report så att det går att läsa utan inloggning på bygget
+      - name: Spara rapport
+        if: always()
+        run: |
+          mkdir -p /tmp/report
+          echo "status: ${{ job.status }}" > /tmp/report/status.txt
+          date -u >> /tmp/report/status.txt
+          [ -f analyze.txt ] && tail -n 300 analyze.txt > /tmp/report/analyze.txt || true
+          [ -f build.txt ] && tail -n 300 build.txt > /tmp/report/build.txt || true
+          [ -f pub.txt ] && tail -n 100 pub.txt > /tmp/report/pub.txt || true
+          [ -f orbit-tv.apk ] && ls -l orbit-tv.apk >> /tmp/report/status.txt || true
+          git config user.name "orbit-ci"
+          git config user.email "orbit-ci@users.noreply.github.com"
+          git checkout --orphan ci-report
+          git rm -rf . -q
+          cp /tmp/report/* .
+          git add -A
+          git commit -q -m "CI-rapport"
+          git push -f origin ci-report
