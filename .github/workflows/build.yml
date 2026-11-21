@@ -52,6 +52,7 @@ jobs:
       # Resultatet skrivs till grenen ci-report så att det går att läsa utan inloggning på bygget
       - name: Spara rapport
         if: always()
+        continue-on-error: true
         run: |
           mkdir -p /tmp/report
           echo "status: ${{ job.status }}" > /tmp/report/status.txt
@@ -60,11 +61,12 @@ jobs:
           [ -f build.txt ] && tail -n 300 build.txt > /tmp/report/build.txt || true
           [ -f pub.txt ] && tail -n 100 pub.txt > /tmp/report/pub.txt || true
           [ -f orbit-tv.apk ] && ls -l orbit-tv.apk >> /tmp/report/status.txt || true
+          git init -q /tmp/rep
+          cp /tmp/report/* /tmp/rep/
+          cd /tmp/rep
           git config user.name "orbit-ci"
           git config user.email "orbit-ci@users.noreply.github.com"
-          git checkout --orphan ci-report
-          git rm -rf . -q
-          cp /tmp/report/* .
+          git checkout -q -b ci-report
           git add -A
           git commit -q -m "CI-rapport"
-          git push -f origin ci-report
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-report
