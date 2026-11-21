@@ -4,13 +4,58 @@ import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Account {
+  final String id;
+  final String name;
+  final String type; // xtream | m3u
   final String url;
   final String user;
   final String pass;
-  const Account(this.url, this.user, this.pass);
+  const Account({required this.id, required this.name, required this.type, required this.url, this.user = '', this.pass = ''});
 
-  Map<String, dynamic> toJson() => {'url': url, 'user': user, 'pass': pass};
-  factory Account.fromJson(Map<String, dynamic> j) => Account(j['url'] as String, j['user'] as String, j['pass'] as String);
+  bool get isM3u => type == 'm3u';
+
+  static String makeId(String url, String user) => sha256.convert(utf8.encode('$url|$user|${DateTime.now().microsecondsSinceEpoch}')).toString().substring(0, 12);
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'type': type, 'url': url, 'user': user, 'pass': pass};
+
+  factory Account.fromJson(Map<String, dynamic> j) {
+    final url = j['url'] as String;
+    final user = (j['user'] as String?) ?? '';
+    final host = Uri.tryParse(url.contains('://') ? url : 'http://$url')?.host ?? url;
+    return Account(
+      id: (j['id'] as String?) ?? sha256.convert(utf8.encode('$url|$user')).toString().substring(0, 12),
+      name: (j['name'] as String?) ?? (user.isEmpty ? host : '$user @ $host'),
+      type: (j['type'] as String?) ?? 'xtream',
+      url: url,
+      user: user,
+      pass: (j['pass'] as String?) ?? '',
+    );
+  }
+}
+
+/// En favorit (film, serie eller kanal) för ett visst konto.
+class Fav {
+  final String accId;
+  final String kind; // movie | series | live
+  final String id;
+  final String name;
+  final String? poster;
+  final String ext;
+  final bool locked;
+  const Fav({required this.accId, required this.kind, required this.id, required this.name, this.poster, this.ext = '', this.locked = false});
+
+  String get key => '$accId|$kind:$id';
+
+  Map<String, dynamic> toJson() => {'acc': accId, 'kind': kind, 'id': id, 'name': name, 'poster': poster, 'ext': ext, 'locked': locked};
+  factory Fav.fromJson(Map<String, dynamic> j) => Fav(
+        accId: j['acc'] as String,
+        kind: j['kind'] as String,
+        id: j['id'] as String,
+        name: j['name'] as String,
+        poster: j['poster'] as String?,
+        ext: (j['ext'] as String?) ?? '',
+        locked: (j['locked'] as bool?) ?? false,
+      );
 }
 
 /// En post i "fortsätt titta".
@@ -68,18 +113,97 @@ class Store {
     _p = await SharedPreferences.getInstance();
   }
 
+  static List<Account> get accounts {
+    final s = _p.getString('accounts');
+    if (s != null) {
+      try {
+        return [for (final j in jsonDecode(s) as List) Account.fromJson(j as Map<String, dynamic>)];
+      } catch (_) {
+        return [];
+      }
+    }
+    // Äldre version: ett enda konto
+    final old = _p.getString('account');
+    if (old != null) {
+      try {
+        return [Account.fromJson(jsonDecode(old) as Map<String, dynamic>)];
+      } catch (_) {}
+    }
+    return [];
+  }
+
+  static Future<void> _writeAccounts(List<Account> l) async {
+    await _p.setString('accounts', jsonEncode([for (final a in l) a.toJson()]));
+    await _p.remove('account');
+  }
+
+  /// Det konto som används just nu.
   static Account? get account {
-    final s = _p.getString('account');
-    if (s == null) return null;
+    final l = accounts;
+    if (l.isEmpty) return null;
+    final id = _p.getString('activeAcc');
+    return l.firstWhere((a) => a.id == id, orElse: () => l.first);
+  }
+
+  static Future<void> addAccount(Account a) async {
+    final l = accounts..add(a);
+    await _writeAccounts(l);
+    await _p.setString('activeAcc', a.id);
+  }
+
+  static Future<void> setActive(String id) => _p.setString('activeAcc', id);
+
+  static Future<void> removeAccount(String id) async {
+    final l = accounts..removeWhere((a) => a.id == id);
+    await _writeAccounts(l);
+    if (_p.getString('activeAcc') == id) await _p.remove('activeAcc');
+    final f = _favAll()..removeWhere((k, v) => v.accId == id);
+    await _favWrite(f);
+  }
+
+  // ---------- Favoriter ----------
+  static Map<String, Fav> _favAll() {
+    final s = _p.getString('favs');
+    if (s == null) return {};
     try {
-      return Account.fromJson(jsonDecode(s) as Map<String, dynamic>);
+      final m = jsonDecode(s) as Map<String, dynamic>;
+      return m.map((k, v) => MapEntry(k, Fav.fromJson(v as Map<String, dynamic>)));
     } catch (_) {
-      return null;
+      return {};
     }
   }
 
-  static Future<void> saveAccount(Account a) => _p.setString('account', jsonEncode(a.toJson()));
-  static Future<void> clearAccount() => _p.remove('account');
+  static Future<void> _favWrite(Map<String, Fav> m) => _p.setString('favs', jsonEncode(m.map((k, v) => MapEntry(k, v.toJson()))));
+
+  static List<Fav> favs(String accId, {String? kind}) => _favAll().values.where((f) => f.accId == accId && (kind == null || f.kind == kind)).toList();
+  static bool isFav(Fav f) => _favAll().containsKey(f.key);
+
+  /// Returnerar true om den nu är favorit.
+  static Future<bool> toggleFav(Fav f) async {
+    final m = _favAll();
+    final on = !m.containsKey(f.key);
+    if (on) {
+      m[f.key] = f;
+    } else {
+      m.remove(f.key);
+    }
+    await _favWrite(m);
+    return on;
+  }
+
+  // ---------- Undertexter ----------
+  static bool get autoSubs => _p.getBool('autoSubs') ?? false;
+  static Future<void> setAutoSubs(bool v) => _p.setBool('autoSubs', v);
+  static String get subLang => _p.getString('subLang') ?? 'sv';
+  static Future<void> setSubLang(String v) => _p.setString('subLang', v);
+  static int get subSize => _p.getInt('subSize') ?? 42;
+  static Future<void> setSubSize(int v) => _p.setInt('subSize', v);
+  static bool get subYellow => _p.getBool('subYellow') ?? false;
+  static Future<void> setSubYellow(bool v) => _p.setBool('subYellow', v);
+  static bool get subBg => _p.getBool('subBg') ?? true;
+  static Future<void> setSubBg(bool v) => _p.setBool('subBg', v);
+  static double get defaultSpeed => _p.getDouble('defaultSpeed') ?? 1.0;
+  static Future<void> setDefaultSpeed(double v) => _p.setDouble('defaultSpeed', v);
 
 
   // ---------- Inställningar ----------

@@ -16,7 +16,8 @@ class PlayerPage extends StatefulWidget {
   final bool live;
   final String kind; // movie | episode
   final bool locked;
-  const PlayerPage({super.key, required this.url, required this.title, required this.key2, this.poster, this.live = false, this.kind = 'movie', this.locked = false});
+  final Fav? fav; // om titeln kan göras till favorit
+  const PlayerPage({super.key, required this.url, required this.title, required this.key2, this.poster, this.live = false, this.kind = 'movie', this.locked = false, this.fav});
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
@@ -38,6 +39,44 @@ class _PlayerPageState extends State<PlayerPage> {
   Timer? _saveTimer;
   final List<StreamSubscription> _subs = [];
   String? _error;
+
+  // Meny (undertexter, ljud, hastighet, favorit)
+  String? _menu; // null | main | subs | audio | speed
+  double _speed = Store.defaultSpeed;
+  bool _autoSubDone = false;
+  late bool _isFav = widget.fav != null && Store.isFav(widget.fav!);
+
+  static const _langCodes = {
+    'sv': ['sv', 'swe', 'svenska', 'swedish'],
+    'en': ['en', 'eng', 'english', 'engelska'],
+    'no': ['no', 'nor', 'nob', 'norwegian', 'norska'],
+    'da': ['da', 'dan', 'danish', 'danska'],
+    'fi': ['fi', 'fin', 'finnish', 'finska'],
+  };
+
+  String _trackName(String id, String? title, String? language, int n) {
+    if (id == 'no') return 'Av';
+    if (id == 'auto') return 'Automatiskt';
+    final parts = [if (title != null && title.isNotEmpty) title, if (language != null && language.isNotEmpty) language];
+    return parts.isEmpty ? 'Spår $n' : parts.join(' · ');
+  }
+
+  bool _isPreferred(SubtitleTrack t) {
+    final codes = _langCodes[Store.subLang] ?? [Store.subLang];
+    final l = (t.language ?? '').toLowerCase();
+    final ti = (t.title ?? '').toLowerCase();
+    return codes.any((c) => l == c || (c.length > 3 && (l.contains(c) || ti.contains(c))) || ti == c);
+  }
+
+  /// Väljer önskat undertextspråk automatiskt när spåren blivit kända.
+  void _autoSubs(Tracks t) {
+    if (_autoSubDone || !Store.autoSubs) return;
+    final real = t.subtitle.where((x) => x.id != 'auto' && x.id != 'no').toList();
+    if (real.isEmpty) return;
+    _autoSubDone = true;
+    final pick = real.where(_isPreferred).toList();
+    if (pick.isNotEmpty) player.setSubtitleTrack(pick.first);
+  }
 
   @override
   void initState() {
@@ -68,6 +107,11 @@ class _PlayerPageState extends State<PlayerPage> {
       if (!mounted) return;
       setState(() => _buffering = b);
     }));
+    _subs.add(player.stream.tracks.listen((t) {
+      if (!mounted) return;
+      _autoSubs(t);
+      setState(() {});
+    }));
     _subs.add(player.stream.error.listen((e) {
       if (!mounted) return;
       setState(() => _error = e);
@@ -79,6 +123,7 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     }));
     await player.open(Media(widget.url, start: start));
+    if (_speed != 1.0 && !widget.live) await player.setRate(_speed);
     _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _save());
     _poke();
   }
@@ -130,6 +175,18 @@ class _PlayerPageState extends State<PlayerPage> {
   KeyEventResult _onKey(FocusNode n, KeyEvent e) {
     if (e is KeyUpEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
+    if (_menu != null) return KeyEventResult.ignored; // menyn sköter sina egna tangenter
+    // Meny: tryck ner när fälten syns, eller på menyknappen
+    if (k == LogicalKeyboardKey.arrowDown && _showUi && e is KeyDownEvent) {
+      setState(() => _menu = 'main');
+      _hideTimer?.cancel();
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.contextMenu || k == LogicalKeyboardKey.keyM) {
+      setState(() => _menu = 'main');
+      _hideTimer?.cancel();
+      return KeyEventResult.handled;
+    }
     // Längre tryck → större hopp
     final rep = e is KeyRepeatEvent;
     if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.mediaRewind) {
@@ -161,6 +218,93 @@ class _PlayerPageState extends State<PlayerPage> {
     return KeyEventResult.ignored;
   }
 
+  void _closeMenu() {
+    setState(() => _menu = null);
+    _focus.requestFocus();
+    _poke();
+  }
+
+  Widget _opt(String label, bool selected, VoidCallback onTap, {bool autofocus = false, IconData? icon}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: TvButton(label: label, icon: icon ?? (selected ? Icons.check : null), selected: selected, autofocus: autofocus, onTap: onTap),
+      );
+
+  Widget _menuPanel() {
+    final tr = player.state.tracks;
+    final cur = player.state.track;
+    final children = <Widget>[];
+    String title;
+    switch (_menu) {
+      case 'subs':
+        title = 'Undertexter';
+        final subs = tr.subtitle.where((x) => x.id != 'auto').toList();
+        var n = 0;
+        for (final t in subs) {
+          if (t.id != 'no') n++;
+          final sel = cur.subtitle.id == t.id;
+          children.add(_opt(_trackName(t.id, t.title, t.language, n), sel, () {
+            player.setSubtitleTrack(t);
+            _closeMenu();
+          }, autofocus: sel));
+        }
+        if (subs.length <= 1) children.add(const Padding(padding: EdgeInsets.only(top: 8), child: Text('Inga undertexter hittades i filen.', style: TextStyle(color: Colors.white70, fontSize: 16))));
+      case 'audio':
+        title = 'Ljudspår';
+        final aud = tr.audio.where((x) => x.id != 'auto' && x.id != 'no').toList();
+        var n = 0;
+        for (final t in aud) {
+          n++;
+          final sel = cur.audio.id == t.id;
+          children.add(_opt(_trackName(t.id, t.title, t.language, n), sel, () {
+            player.setAudioTrack(t);
+            _closeMenu();
+          }, autofocus: sel));
+        }
+        if (aud.isEmpty) children.add(const Text('Inga ljudspår hittades.', style: TextStyle(color: Colors.white70, fontSize: 16)));
+      case 'speed':
+        title = 'Hastighet';
+        for (final r in const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]) {
+          children.add(_opt('${r == r.roundToDouble() ? r.toInt() : r}×', _speed == r, () {
+            setState(() => _speed = r);
+            player.setRate(r);
+            _closeMenu();
+          }, autofocus: _speed == r));
+        }
+      default:
+        title = 'Meny';
+        if (!widget.live) {
+          children.add(_opt('Undertexter', false, () => setState(() => _menu = 'subs'), autofocus: true, icon: Icons.subtitles));
+          children.add(_opt('Ljudspår', false, () => setState(() => _menu = 'audio'), icon: Icons.audiotrack));
+          children.add(_opt('Hastighet (${_speed == _speed.roundToDouble() ? _speed.toInt() : _speed}×)', false, () => setState(() => _menu = 'speed'), icon: Icons.speed));
+        } else {
+          children.add(_opt('Ljudspår', false, () => setState(() => _menu = 'audio'), autofocus: true, icon: Icons.audiotrack));
+        }
+        if (widget.fav != null) {
+          children.add(_opt(_isFav ? 'Ta bort favorit' : 'Lägg till favorit', false, () async {
+            final on = await Store.toggleFav(widget.fav!);
+            if (mounted) setState(() => _isFav = on);
+          }, icon: _isFav ? Icons.favorite : Icons.favorite_border));
+        }
+        children.add(_opt('Stäng', false, _closeMenu, icon: Icons.close));
+    }
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        width: 420,
+        margin: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.black.withAlpha(225), borderRadius: BorderRadius.circular(16)),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
+            const SizedBox(height: 12),
+            ...children,
+          ]),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _hideTimer?.cancel();
@@ -180,14 +324,40 @@ class _PlayerPageState extends State<PlayerPage> {
   Widget build(BuildContext context) {
     final shown = _seekTarget ?? _pos;
     final frac = _dur.inMilliseconds > 0 ? (shown.inMilliseconds / _dur.inMilliseconds).clamp(0.0, 1.0) : 0.0;
-    return Scaffold(
+    return PopScope(
+      canPop: _menu == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_menu != null && _menu != 'main') {
+          setState(() => _menu = 'main');
+        } else {
+          _closeMenu();
+        }
+      },
+      child: Scaffold(
       backgroundColor: Colors.black,
       body: Focus(
         focusNode: _focus,
         autofocus: true,
         onKeyEvent: _onKey,
         child: Stack(fit: StackFit.expand, children: [
-          Video(controller: controller, controls: NoVideoControls, fit: BoxFit.contain),
+          Video(
+            controller: controller,
+            controls: NoVideoControls,
+            fit: BoxFit.contain,
+            subtitleViewConfiguration: SubtitleViewConfiguration(
+              style: TextStyle(
+                fontSize: Store.subSize.toDouble(),
+                height: 1.3,
+                fontWeight: FontWeight.w600,
+                color: Store.subYellow ? const Color(0xFFFFE94A) : Colors.white,
+                backgroundColor: Store.subBg ? const Color(0xAA000000) : null,
+                shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
+              ),
+              textAlign: TextAlign.center,
+              padding: const EdgeInsets.fromLTRB(48, 0, 48, 56),
+            ),
+          ),
           if (_buffering && _error == null) const Center(child: CircularProgressIndicator(color: Colors.white)),
           if (_error != null)
             Center(
@@ -215,7 +385,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   padding: const EdgeInsets.fromLTRB(48, 48, 48, 32),
                   decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Colors.black87, Colors.transparent])),
                   child: widget.live
-                      ? const Text('LIVE', style: TextStyle(fontSize: 20, color: Colors.redAccent, fontWeight: FontWeight.w800))
+                      ? const Row(children: [Text('LIVE', style: TextStyle(fontSize: 20, color: Colors.redAccent, fontWeight: FontWeight.w800)), Spacer(), Text('▼ Meny', style: TextStyle(fontSize: 16, color: Colors.white60))])
                       : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(4),
@@ -230,14 +400,17 @@ class _PlayerPageState extends State<PlayerPage> {
                               const SizedBox(width: 16),
                               const Text('Spolar…', style: TextStyle(fontSize: 18, color: Colors.white70)),
                             ],
+                            const Spacer(),
+                            const Text('▼ Meny', style: TextStyle(fontSize: 16, color: Colors.white60)),
                           ]),
                         ]),
                 ),
               ]),
             ),
           ),
+          if (_menu != null) _menuPanel(),
         ]),
       ),
-    );
+    ));
   }
 }

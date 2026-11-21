@@ -9,9 +9,10 @@ const kPanel = Color(0xFF151828);
 class Tv extends StatefulWidget {
   final Widget Function(BuildContext context, bool focused) builder;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress; // håll OK nedan på fjärrkontrollen
   final bool autofocus;
   final BorderRadius radius;
-  const Tv({super.key, required this.builder, this.onTap, this.autofocus = false, this.radius = const BorderRadius.all(Radius.circular(12))});
+  const Tv({super.key, required this.builder, this.onTap, this.onLongPress, this.autofocus = false, this.radius = const BorderRadius.all(Radius.circular(12))});
 
   @override
   State<Tv> createState() => _TvState();
@@ -19,13 +20,41 @@ class Tv extends StatefulWidget {
 
 class _TvState extends State<Tv> {
   bool _f = false;
+  bool _down = false;
+  bool _long = false;
+
+  KeyEventResult _key(FocusNode n, KeyEvent e) {
+    if (widget.onLongPress == null) return KeyEventResult.ignored;
+    final k = e.logicalKey;
+    if (k != LogicalKeyboardKey.select && k != LogicalKeyboardKey.enter && k != LogicalKeyboardKey.gameButtonA) return KeyEventResult.ignored;
+    if (e is KeyDownEvent) {
+      _down = true;
+      _long = false;
+    } else if (e is KeyRepeatEvent) {
+      if (_down && !_long) {
+        _long = true;
+        widget.onLongPress!();
+      }
+    } else if (e is KeyUpEvent) {
+      final wasShort = _down && !_long;
+      _down = false;
+      _long = false;
+      if (wasShort) widget.onTap?.call();
+    }
+    return KeyEventResult.handled;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: _key,
+      child: InkWell(
       autofocus: widget.autofocus,
       borderRadius: widget.radius,
       onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
       focusColor: Colors.transparent,
       hoverColor: Colors.transparent,
       onFocusChange: (f) {
@@ -43,7 +72,7 @@ class _TvState extends State<Tv> {
         ),
         child: widget.builder(context, _f),
       ),
-    );
+    ));
   }
 }
 

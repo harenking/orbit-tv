@@ -11,9 +11,8 @@ const String kLegalShort =
     'Du ansvarar själv för att din användning följer gällande lagar och din leverantörs villkor.';
 
 class SettingsPage extends StatefulWidget {
-  final Xtream api;
-  final VoidCallback onLogout;
-  const SettingsPage({super.key, required this.api, required this.onLogout});
+  final Source api;
+  const SettingsPage({super.key, required this.api});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -127,8 +126,8 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.fromLTRB(48, 0, 48, 48),
       children: [
         _head('Konto'),
-        _row('Server', hint: acc?.url ?? '', trailing: const SizedBox.shrink()),
-        _row('Användare', hint: acc?.user ?? '', trailing: TvButton(label: 'Logga ut', icon: Icons.logout, onTap: widget.onLogout)),
+        _row('Aktivt konto', hint: acc?.name ?? '', trailing: const SizedBox.shrink()),
+        const Text('Lägg till, byt eller ta bort konton och spellistor under fliken Konton.', style: TextStyle(color: Colors.white60, fontSize: 15)),
 
         _head('Uppspelning'),
         _row('Spolningssteg', hint: 'Vänster/höger på fjärrkontrollen. Håll in för tre gånger så långt.',
@@ -139,6 +138,25 @@ class _SettingsPageState extends State<SettingsPage> {
           await Store.clearProgress();
           if (mounted) setState(() {});
         })),
+
+        _row('Standardhastighet', trailing: _choice<double>(const [('0,75×', 0.75), ('1×', 1.0), ('1,25×', 1.25), ('1,5×', 1.5)], Store.defaultSpeed, Store.setDefaultSpeed)),
+
+        _head('Undertexter'),
+        _row('Välj automatiskt', hint: 'Slå på önskat språk ur filen när det finns. Du kan alltid byta i spelarens meny (▼).',
+            trailing: _choice<bool>(const [('På', true), ('Av', false)], Store.autoSubs, Store.setAutoSubs)),
+        _row('Språk', trailing: _choice<String>(const [('Svenska', 'sv'), ('Engelska', 'en'), ('Norska', 'no'), ('Danska', 'da'), ('Finska', 'fi')], Store.subLang, Store.setSubLang)),
+        _row('Storlek', trailing: _choice<int>(const [('Liten', 32), ('Mellan', 42), ('Stor', 54), ('Extra stor', 68)], Store.subSize, Store.setSubSize)),
+        _row('Färg', trailing: _choice<bool>(const [('Vit', false), ('Gul', true)], Store.subYellow, Store.setSubYellow)),
+        _row('Mörk bakgrund', trailing: _choice<bool>(const [('På', true), ('Av', false)], Store.subBg, Store.setSubBg)),
+        Container(
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(10)),
+          child: Center(
+            child: Text('Så här ser undertexten ut',
+                style: TextStyle(fontSize: Store.subSize * 0.6, fontWeight: FontWeight.w600, color: Store.subYellow ? const Color(0xFFFFE94A) : Colors.white, backgroundColor: Store.subBg ? const Color(0xAA000000) : null)),
+          ),
+        ),
 
         _head('Föräldralås'),
         if (!hasPin)
@@ -191,7 +209,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
 
         _head('Om Orbit IPTV'),
-        const Text('Version 0.2', style: TextStyle(fontSize: 18, color: Colors.white70)),
+        const Text('Version 0.3', style: TextStyle(fontSize: 18, color: Colors.white70)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),

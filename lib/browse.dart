@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'parental.dart';
-import 'player_page.dart';
-import 'series_page.dart';
+import 'open.dart';
 import 'storage.dart';
 import 'tv.dart';
 
 /// Kategorier till vänster, innehåll i ett rutnät till höger.
 class BrowsePage extends StatefulWidget {
-  final Xtream api;
+  final Source api;
   final Kind kind;
   const BrowsePage({super.key, required this.api, required this.kind});
 
@@ -82,17 +81,18 @@ class _BrowsePageState extends State<BrowsePage> {
     }
   }
 
-  void _open(Item it) {
-    final nav = Navigator.of(context);
-    switch (it.kind) {
-      case Kind.series:
-        nav.push(MaterialPageRoute(builder: (_) => SeriesPage(api: widget.api, item: it, locked: _inVault)));
-      case Kind.movie:
-        nav.push(MaterialPageRoute(
-            builder: (_) => PlayerPage(url: widget.api.movieUrl(it.id, it.ext), title: it.name, key2: 'm:${it.id}', poster: it.poster, kind: 'movie', locked: _inVault)));
-      case Kind.live:
-        nav.push(MaterialPageRoute(builder: (_) => PlayerPage(url: widget.api.liveUrl(it.id), title: it.name, key2: 'l:${it.id}', poster: it.poster, live: true)));
-    }
+  Future<void> _open(Item it) async {
+    await openItem(context, widget.api, it, locked: _inVault);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleFav(Item it) async {
+    final on = await Store.toggleFav(favOf(widget.api, it, locked: _inVault));
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(duration: const Duration(seconds: 2), content: Text(on ? 'Tillagd i favoriter' : 'Borttagen från favoriter', style: const TextStyle(fontSize: 18))));
   }
 
   @override
@@ -133,7 +133,7 @@ class _BrowsePageState extends State<BrowsePage> {
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 24, 8),
-            child: TvField(controller: _searchCtl, label: 'Sök i kategorin…', icon: Icons.search, onChanged: (v) => setState(() => _filter = v)),
+            child: TvField(controller: _searchCtl, label: 'Sök i kategorin… (håll in OK på en titel = favorit)', icon: Icons.search, onChanged: (v) => setState(() => _filter = v)),
           ),
           Expanded(
             child: _items == null
@@ -159,8 +159,10 @@ class _BrowsePageState extends State<BrowsePage> {
 
   Widget _tile(Item it, bool live) {
     final prog = it.kind == Kind.movie ? Store.progress('m:${it.id}') : null;
+    final isFav = Store.isFav(favOf(widget.api, it));
     return Tv(
       onTap: () => _open(it),
+      onLongPress: () => _toggleFav(it),
       builder: (c, f) => ClipRRect(
         borderRadius: BorderRadius.circular(9),
         child: Container(
@@ -169,6 +171,7 @@ class _BrowsePageState extends State<BrowsePage> {
             Expanded(
               child: Stack(fit: StackFit.expand, children: [
                 posterImage(it.poster, fit: live ? BoxFit.contain : BoxFit.cover),
+                if (isFav) const Positioned(top: 6, right: 6, child: Icon(Icons.favorite, color: Colors.pinkAccent, size: 22)),
                 if (prog != null && prog.durSec > 0)
                   Align(
                     alignment: Alignment.bottomCenter,

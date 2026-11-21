@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+import 'accounts_page.dart';
 import 'api.dart';
+import 'home.dart';
 import 'browse.dart';
 import 'parental.dart';
 import 'player_page.dart';
@@ -29,50 +31,13 @@ class OrbitApp extends StatelessWidget {
         colorScheme: const ColorScheme.dark(primary: kAccent),
         useMaterial3: true,
       ),
-      home: Store.account == null ? const LoginPage() : HomePage(api: Xtream(Store.account!)),
+      home: Store.account == null ? const LoginPage() : HomePage(api: Source.of(Store.account!)),
     );
   }
 }
 
-class LoginPage extends StatefulWidget {
+class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
-
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> {
-  final _url = TextEditingController();
-  final _user = TextEditingController();
-  final _pass = TextEditingController();
-  bool _busy = false;
-  String? _error;
-  bool _agreed = false;
-
-  Future<void> _go() async {
-    if (_url.text.trim().isEmpty || _user.text.trim().isEmpty || _pass.text.isEmpty) {
-      setState(() => _error = 'Fyll i alla fält');
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    final acc = Account(_url.text.trim(), _user.text.trim(), _pass.text);
-    try {
-      await Xtream(acc).login();
-      await Store.saveAccount(acc);
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomePage(api: Xtream(acc))));
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-          _error = e.toString().replaceFirst('Exception: ', '');
-        });
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,29 +54,13 @@ class _LoginPageState extends State<LoginPage> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            TvField(autofocus: true, controller: _url, label: 'Serveradress (t.ex. http://server.se:8080)', keyboardType: TextInputType.url, action: TextInputAction.next),
-            const SizedBox(height: 12),
-            TvField(controller: _user, label: 'Användarnamn', action: TextInputAction.next),
-            const SizedBox(height: 12),
-            TvField(controller: _pass, label: 'Lösenord', obscure: true, onSubmitted: (_) => _go()),
-            const SizedBox(height: 12),
-            Tv(
-              onTap: () => setState(() => _agreed = !_agreed),
-              builder: (c, f) => Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(children: [
-                  Icon(_agreed ? Icons.check_box : Icons.check_box_outline_blank, size: 28),
-                  const SizedBox(width: 12),
-                  const Expanded(child: Text('Jag har laglig rätt att använda den här tjänsten.', style: TextStyle(fontSize: 17))),
-                ]),
-              ),
-            ),
-            if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.redAccent, fontSize: 18))),
-            const SizedBox(height: 16),
-            Center(
-              child: _busy
-                  ? const CircularProgressIndicator()
-                  : Opacity(opacity: _agreed ? 1 : 0.4, child: TvButton(label: 'Anslut', icon: Icons.login, onTap: _agreed ? _go : () {})),
+            AddAccountForm(
+              autofocus: true,
+              onAdded: (acc) async {
+                await Store.addAccount(acc);
+                if (!context.mounted) return;
+                Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomePage(api: Source.of(acc))));
+              },
             ),
           ]),
         ),
@@ -120,10 +69,10 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-enum Section { cont, movies, series, live, settings }
+enum Section { home, cont, movies, series, live, favs, accounts, settings }
 
 class HomePage extends StatefulWidget {
-  final Xtream api;
+  final Source api;
   const HomePage({super.key, required this.api});
 
   @override
@@ -131,18 +80,37 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  Section _tab = Section.cont;
+  Section _tab = Section.home;
 
-  Future<void> _logout() async {
-    await Store.clearAccount();
+  /// Byter aktivt konto och bygger om hela appen för det.
+  Future<void> _use(Account a) async {
+    await Store.setActive(a.id);
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomePage(api: Source.of(a))));
+  }
+
+  /// Kontolistan ändrades (borttagning): byt till ett kvar, eller visa inloggning.
+  void _accountsChanged() {
+    final a = Store.account;
+    if (a == null) {
+      Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
+    } else if (a.id != widget.api.a.id) {
+      _use(a);
+    } else {
+      setState(() {});
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     Widget body;
     switch (_tab) {
+      case Section.home:
+        body = HomeTab(key: ValueKey('h${widget.api.a.id}'), api: widget.api);
+      case Section.favs:
+        body = FavoritesTab(key: const ValueKey('f'), api: widget.api);
+      case Section.accounts:
+        body = AccountsPage(api: widget.api, onUse: _use, onChanged: _accountsChanged);
       case Section.cont:
         body = ContinuePage(api: widget.api, onChanged: () => setState(() {}));
       case Section.movies:
@@ -152,7 +120,7 @@ class _HomePageState extends State<HomePage> {
       case Section.live:
         body = BrowsePage(key: const ValueKey('l'), api: widget.api, kind: Kind.live);
       case Section.settings:
-        body = SettingsPage(api: widget.api, onLogout: _logout);
+        body = SettingsPage(api: widget.api);
     }
     return Scaffold(
       body: SafeArea(
@@ -166,13 +134,19 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(width: 10),
                 const Text('Orbit', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
                 const SizedBox(width: 24),
-                TvButton(label: 'Fortsätt titta', selected: _tab == Section.cont, autofocus: true, onTap: () => setState(() => _tab = Section.cont)),
+                TvButton(label: 'Hem', icon: Icons.home, selected: _tab == Section.home, autofocus: true, onTap: () => setState(() => _tab = Section.home)),
+                const SizedBox(width: 8),
+                TvButton(label: 'Fortsätt titta', selected: _tab == Section.cont, onTap: () => setState(() => _tab = Section.cont)),
                 const SizedBox(width: 8),
                 TvButton(label: 'Filmer', selected: _tab == Section.movies, onTap: () => setState(() => _tab = Section.movies)),
                 const SizedBox(width: 8),
                 TvButton(label: 'Serier', selected: _tab == Section.series, onTap: () => setState(() => _tab = Section.series)),
                 const SizedBox(width: 8),
                 TvButton(label: 'Live', selected: _tab == Section.live, onTap: () => setState(() => _tab = Section.live)),
+                const SizedBox(width: 8),
+                TvButton(label: 'Favoriter', icon: Icons.favorite, selected: _tab == Section.favs, onTap: () => setState(() => _tab = Section.favs)),
+                const SizedBox(width: 8),
+                TvButton(label: 'Konton', icon: Icons.people, selected: _tab == Section.accounts, onTap: () => setState(() => _tab = Section.accounts)),
                 const SizedBox(width: 8),
                 TvButton(label: 'Inställningar', icon: Icons.settings, selected: _tab == Section.settings, onTap: () => setState(() => _tab = Section.settings)),
               ]),
@@ -186,7 +160,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 class ContinuePage extends StatefulWidget {
-  final Xtream api;
+  final Source api;
   final VoidCallback onChanged;
   const ContinuePage({super.key, required this.api, required this.onChanged});
 

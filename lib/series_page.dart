@@ -5,7 +5,7 @@ import 'storage.dart';
 import 'tv.dart';
 
 class SeriesPage extends StatefulWidget {
-  final Xtream api;
+  final Source api;
   final Item item;
   final bool locked;
   const SeriesPage({super.key, required this.api, required this.item, this.locked = false});
@@ -18,6 +18,7 @@ class _SeriesPageState extends State<SeriesPage> {
   SeriesInfo? _info;
   String? _error;
   int? _season;
+  late bool _fav = Store.isFav(Fav(accId: widget.api.a.id, kind: 'series', id: widget.item.id, name: ''));
 
   @override
   void initState() {
@@ -62,7 +63,18 @@ class _SeriesPageState extends State<SeriesPage> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(48, 24, 48, 0),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(widget.item.name, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white)),
+            Row(children: [
+              Expanded(child: Text(widget.item.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Colors.white))),
+              TvButton(
+                label: _fav ? 'Favorit' : 'Lägg till favorit',
+                icon: _fav ? Icons.favorite : Icons.favorite_border,
+                selected: _fav,
+                onTap: () async {
+                  final on = await Store.toggleFav(Fav(accId: widget.api.a.id, kind: 'series', id: widget.item.id, name: widget.item.name, poster: widget.item.poster, ext: widget.item.ext, locked: widget.locked));
+                  if (mounted) setState(() => _fav = on);
+                },
+              ),
+            ]),
             const SizedBox(height: 16),
             if (_error != null) Text(_error!, style: const TextStyle(color: Colors.redAccent, fontSize: 20)),
             if (info == null && _error == null) const Expanded(child: Center(child: CircularProgressIndicator())),
