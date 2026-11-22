@@ -153,8 +153,9 @@ class DpadNav extends StatelessWidget {
   }
 }
 
-/// Textruta för TV: tangentbordet öppnas när rutan markeras och när man trycker OK.
-class TvField extends StatefulWidget {
+/// Textruta för TV: OK öppnar ett eget tangentbord som styrs helt med piltangenterna
+/// (systemets tangentbord låter piltangenterna flytta markören i stället).
+class TvField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final bool obscure;
@@ -177,45 +178,160 @@ class TvField extends StatefulWidget {
     this.icon,
   });
 
-  @override
-  State<TvField> createState() => _TvFieldState();
-}
-
-class _TvFieldState extends State<TvField> {
-  final FocusNode _node = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _node.addListener(() {
-      if (_node.hasFocus) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          SystemChannels.textInput.invokeMethod<void>('TextInput.show');
-        });
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _node.dispose();
-    super.dispose();
+  Future<void> _open(BuildContext context) async {
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => TvKeyboard(
+        label: label,
+        controller: controller,
+        obscure: obscure,
+        url: keyboardType == TextInputType.url,
+        onChanged: onChanged,
+      ),
+    );
+    onSubmitted?.call(controller.text);
   }
 
   @override
   Widget build(BuildContext context) {
-    return DpadNav(
-      child: TextField(
-        focusNode: _node,
-        autofocus: widget.autofocus,
-        controller: widget.controller,
-        obscureText: widget.obscure,
-        keyboardType: widget.keyboardType,
-        textInputAction: widget.action,
-        onSubmitted: widget.onSubmitted,
-        onChanged: widget.onChanged,
-        style: const TextStyle(fontSize: 20),
-        decoration: InputDecoration(labelText: widget.label, prefixIcon: widget.icon == null ? null : Icon(widget.icon), filled: true, border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
+    return Tv(
+      autofocus: autofocus,
+      onTap: () => _open(context),
+      radius: BorderRadius.circular(12),
+      builder: (c, f) => ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (c, v, _) {
+          final t = v.text;
+          final shown = obscure ? '•' * t.length : t;
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(color: f ? Colors.white24 : Colors.white10, borderRadius: BorderRadius.circular(10)),
+            child: Row(children: [
+              if (icon != null) ...[Icon(icon, color: Colors.white70), const SizedBox(width: 12)],
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: Colors.white60)),
+                  const SizedBox(height: 2),
+                  Text(shown.isEmpty ? ' ' : shown, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 20, color: Colors.white)),
+                ]),
+              ),
+              const Icon(Icons.keyboard, color: Colors.white38),
+            ]),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Tangentbord som alla fjärrkontroller kan använda: välj tecken med piltangenterna och tryck OK.
+class TvKeyboard extends StatefulWidget {
+  final String label;
+  final TextEditingController controller;
+  final bool obscure;
+  final bool url;
+  final void Function(String)? onChanged;
+  const TvKeyboard({super.key, required this.label, required this.controller, this.obscure = false, this.url = false, this.onChanged});
+
+  @override
+  State<TvKeyboard> createState() => _TvKeyboardState();
+}
+
+class _TvKeyboardState extends State<TvKeyboard> {
+  bool _shift = false;
+  bool _show = false;
+
+  static const _rows = [
+    '1234567890',
+    'qwertyuiopå',
+    'asdfghjklöä',
+    'zxcvbnm-_.@',
+  ];
+
+  void _set(String t) {
+    widget.controller.value = TextEditingValue(text: t, selection: TextSelection.collapsed(offset: t.length));
+    widget.onChanged?.call(t);
+    setState(() {});
+  }
+
+  void _type(String c) {
+    _set(widget.controller.text + (_shift ? c.toUpperCase() : c));
+    if (_shift) setState(() => _shift = false);
+  }
+
+  void _back() {
+    final t = widget.controller.text;
+    if (t.isNotEmpty) _set(t.substring(0, t.length - 1));
+  }
+
+  Widget _key(String label, VoidCallback onTap, {double w = 62, bool autofocus = false, bool selected = false, IconData? icon}) {
+    return Padding(
+      padding: const EdgeInsets.all(3),
+      child: SizedBox(
+        width: w,
+        height: 54,
+        child: Tv(
+          autofocus: autofocus,
+          onTap: onTap,
+          radius: BorderRadius.circular(10),
+          builder: (c, f) => Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: selected ? kAccent : (f ? Colors.white24 : Colors.white12), borderRadius: BorderRadius.circular(8)),
+            child: icon != null ? Icon(icon, color: Colors.white) : Text(label, style: const TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = widget.controller.text;
+    final shown = widget.obscure && !_show ? '•' * t.length : t;
+    return Dialog(
+      backgroundColor: kBg,
+      insetPadding: const EdgeInsets.all(24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(widget.label, style: const TextStyle(fontSize: 16, color: Colors.white60)),
+            const SizedBox(height: 6),
+            Container(
+              width: 760,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(10), border: Border.all(color: kAccent, width: 2)),
+              child: Text('${shown.isEmpty ? '' : shown}▏', maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.left, style: const TextStyle(fontSize: 24, color: Colors.white)),
+            ),
+            const SizedBox(height: 10),
+            for (var r = 0; r < _rows.length; r++)
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                for (final ch in _rows[r].split(''))
+                  _key(_shift ? ch.toUpperCase() : ch, () => _type(ch), autofocus: r == 1 && ch == 'q'),
+              ]),
+            if (widget.url)
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                _key('http://', () => _set('${widget.controller.text}http://'), w: 120),
+                for (final ch in ':/?&=%#+'.split('')) _key(ch, () => _type(ch)),
+              ])
+            else
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                for (final ch in '!?,:;/+*()'.split('')) _key(ch, () => _type(ch)),
+              ]),
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              _key('Skift', () => setState(() => _shift = !_shift), w: 110, selected: _shift, icon: Icons.keyboard_capslock),
+              _key('Mellanslag', () => _type(' '), w: 220, icon: Icons.space_bar),
+              _key('Radera', _back, w: 110, icon: Icons.backspace_outlined),
+              _key('Rensa', () => _set(''), w: 110, icon: Icons.delete_sweep),
+              if (widget.obscure) _key('Visa', () => setState(() => _show = !_show), w: 90, selected: _show, icon: Icons.visibility),
+            ]),
+            const SizedBox(height: 8),
+            TvButton(label: 'Klar', icon: Icons.check, selected: true, onTap: () => Navigator.of(context).pop()),
+          ]),
+        ),
       ),
     );
   }

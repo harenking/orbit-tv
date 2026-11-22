@@ -87,7 +87,7 @@ class _AddAccountFormState extends State<AddAccountForm> {
         const SizedBox(height: 12),
         TvField(controller: _user, label: 'Användarnamn', action: TextInputAction.next),
         const SizedBox(height: 12),
-        TvField(controller: _pass, label: 'Lösenord', obscure: true, onSubmitted: (_) => _go()),
+        TvField(controller: _pass, label: 'Lösenord', obscure: true),
       ],
       const SizedBox(height: 12),
       Tv(
