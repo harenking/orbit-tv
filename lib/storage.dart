@@ -225,6 +225,11 @@ class Store {
     return on;
   }
 
+  // ---------- Strömning ----------
+  /// auto = direkt, växel bara vid fel · always = alltid via lokal strömväxel
+  static String get streamMode => _p.getString('streamMode') ?? 'auto';
+  static Future<void> setStreamMode(String v) => _p.setString('streamMode', v);
+
   // ---------- Undertexter ----------
   static bool get autoSubs => _p.getBool('autoSubs') ?? false;
   static Future<void> setAutoSubs(bool v) => _p.setBool('autoSubs', v);

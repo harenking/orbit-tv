@@ -139,6 +139,8 @@ class _SettingsPageState extends State<SettingsPage> {
           if (mounted) setState(() {});
         })),
 
+        _row('Strömning', hint: 'Automatisk spelar direkt och byter till strömväxeln om leverantören ger fel (som 502). "Alltid växel" kan hjälpa för vissa titlar men spolning kan bli långsammare.',
+            trailing: _choice<String>(const [('Automatisk', 'auto'), ('Alltid växel', 'always')], Store.streamMode, Store.setStreamMode)),
         _row('Standardhastighet', trailing: _choice<double>(const [('0,75×', 0.75), ('1×', 1.0), ('1,25×', 1.25), ('1,5×', 1.5)], Store.defaultSpeed, Store.setDefaultSpeed)),
 
         _head('Undertexter'),
