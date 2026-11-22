@@ -22,6 +22,7 @@ class _BrowsePageState extends State<BrowsePage> {
     super.dispose();
   }
 
+  static const _allId = '__all__';
   List<Cat>? _cats;
   Cat? _cat;
   List<Item>? _items;
@@ -46,11 +47,16 @@ class _BrowsePageState extends State<BrowsePage> {
       final vault = all.where((c) => Guard.matches(c.name)).toList();
       final c = all.where((x) => !vault.contains(x)).toList();
       if (vault.isNotEmpty) c.add(const Cat(Guard.vaultId, Guard.vaultName));
+      c.insert(0, const Cat(_allId, 'Alla'));
       setState(() {
         _vault = vault;
         _cats = c;
       });
-      if (c.isNotEmpty) _pick(c.first);
+      if (c.length > 1) {
+        _pick(c[1]);
+      } else {
+        _pick(c.first);
+      }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     }
@@ -71,6 +77,11 @@ class _BrowsePageState extends State<BrowsePage> {
         final lists = await Future.wait(_vault.map((v) => widget.api.items(widget.kind, v.id)));
         it = [for (final l in lists) ...l];
         it.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      } else if (c.id == _allId) {
+        // Allt utom föräldralåsets kategorier (de finns bara i mappen med PIN)
+        final hidden = {for (final v in _vault) v.id};
+        final all = await widget.api.items(widget.kind, '');
+        it = all.where((i) => !hidden.contains(i.catId)).toList();
       } else {
         it = await widget.api.items(widget.kind, c.id);
       }
