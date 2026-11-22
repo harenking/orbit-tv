@@ -59,6 +59,36 @@ class Fav {
 }
 
 /// En post i "fortsätt titta".
+/// Vilket avsnitt en post gäller (för serier).
+class EpMeta {
+  final String seriesId;
+  final String series;
+  final String? poster; // seriens affisch
+  final int season;
+  final int number;
+  final String title;
+  const EpMeta({required this.seriesId, required this.series, this.poster, required this.season, required this.number, required this.title});
+
+  String get short => 'S$season · Avsnitt $number';
+
+  Map<String, dynamic> toJson() => {'sid': seriesId, 'series': series, 'poster': poster, 's': season, 'n': number, 't': title};
+  static EpMeta? fromJson(dynamic j) {
+    if (j is! Map) return null;
+    try {
+      return EpMeta(
+        seriesId: j['sid'] as String,
+        series: j['series'] as String,
+        poster: j['poster'] as String?,
+        season: (j['s'] as num).toInt(),
+        number: (j['n'] as num).toInt(),
+        title: (j['t'] as String?) ?? '',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 class Progress {
   final String key;
   final String title;
@@ -69,6 +99,7 @@ class Progress {
   final int updated;
   final String kind; // movie | episode
   final bool locked;
+  final EpMeta? ep;
   const Progress({
     required this.key,
     required this.title,
@@ -79,9 +110,11 @@ class Progress {
     required this.updated,
     required this.kind,
     this.locked = false,
+    this.ep,
   });
 
   Map<String, dynamic> toJson() => {
+        if (ep != null) 'ep': ep!.toJson(),
         'key': key,
         'title': title,
         'poster': poster,
@@ -103,6 +136,7 @@ class Progress {
         updated: (j['updated'] as num).toInt(),
         kind: (j['kind'] as String?) ?? 'movie',
         locked: (j['locked'] as bool?) ?? false,
+        ep: EpMeta.fromJson(j['ep']),
       );
 }
 
@@ -258,6 +292,36 @@ class Store {
   static Progress? progress(String key) => _all()[key];
 
   /// Senast tittade först. Färdigtittade (över 95 %) tas inte med.
+  // ---------- Fellogg ----------
+  static List<String> get errors => _p.getStringList('errors') ?? const [];
+  static void logError(String e) {
+    final l = [...errors, '${DateTime.now().toIso8601String().substring(0, 19)}  ${e.length > 300 ? e.substring(0, 300) : e}'];
+    if (l.length > 20) l.removeRange(0, l.length - 20);
+    _p.setStringList('errors', l);
+  }
+
+  static Future<void> clearErrors() => _p.remove('errors');
+
+  // ---------- Sedda avsnitt/filmer ----------
+  static List<String> _watched() => _p.getStringList('watched') ?? const [];
+  static bool isWatched(String key) => _watched().contains(key);
+  static Future<void> markWatched(String key) async {
+    final l = [..._watched()]..remove(key);
+    l.add(key);
+    if (l.length > 3000) l.removeRange(0, l.length - 3000);
+    await _p.setStringList('watched', l);
+  }
+
+  /// Senast spelade avsnitt (nyckel e:<id>) per serie.
+  static String? lastEp(String seriesId) => _p.getString('lastEp:$seriesId');
+  static Future<void> setLastEp(String seriesId, String key) => _p.setString('lastEp:$seriesId', key);
+
+  /// Senaste påbörjade avsnitt i en serie (för att visa var man är).
+  static Progress? lastInSeries(String seriesId) {
+    final l = _all().values.where((p) => p.ep?.seriesId == seriesId).toList()..sort((a, b) => b.updated.compareTo(a.updated));
+    return l.isEmpty ? null : l.first;
+  }
+
   static List<Progress> continueList() {
     final l = _all().values.where((p) => p.durSec > 0 && p.posSec > 10 && p.posSec < p.durSec * 0.95).toList();
     l.sort((a, b) => b.updated.compareTo(a.updated));

@@ -17,14 +17,17 @@ class PlayerPage extends StatefulWidget {
   final String kind; // movie | episode
   final bool locked;
   final Fav? fav; // om titeln kan göras till favorit
-  const PlayerPage({super.key, required this.url, required this.title, required this.key2, this.poster, this.live = false, this.kind = 'movie', this.locked = false, this.fav});
+  final EpMeta? ep; // vilket avsnitt (serier)
+  final PlayerPage Function()? next; // nästa avsnitt
+  final String? nextLabel;
+  const PlayerPage({super.key, required this.url, required this.title, required this.key2, this.poster, this.live = false, this.kind = 'movie', this.locked = false, this.fav, this.ep, this.next, this.nextLabel});
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
 }
 
 class _PlayerPageState extends State<PlayerPage> {
-  late final Player player = Player(configuration: const PlayerConfiguration(bufferSize: 64 * 1024 * 1024));
+  late final Player player = Player(configuration: const PlayerConfiguration(bufferSize: 32 * 1024 * 1024));
   late final VideoController controller = VideoController(player);
   final FocusNode _focus = FocusNode();
 
@@ -39,6 +42,14 @@ class _PlayerPageState extends State<PlayerPage> {
   Timer? _saveTimer;
   final List<StreamSubscription> _subs = [];
   String? _error;
+
+  // Fortsätt titta: hoppet görs först när filen är laddad (mpv ignorerar annars ofta startpunkten)
+  Duration? _pendingResume;
+  bool _resuming = false;
+
+  // Nästa avsnitt
+  bool _nextDismissed = false;
+  bool _leaving = false;
 
   // Meny (undertexter, ljud, hastighet, favorit)
   String? _menu; // null | main | subs | audio | speed
@@ -98,6 +109,11 @@ class _PlayerPageState extends State<PlayerPage> {
     _subs.add(player.stream.duration.listen((d) {
       if (!mounted) return;
       setState(() => _dur = d);
+      final r = _pendingResume;
+      if (r != null && d > Duration.zero) {
+        _pendingResume = null;
+        _resume(r);
+      }
     }));
     _subs.add(player.stream.playing.listen((p) {
       if (!mounted) return;
@@ -117,19 +133,55 @@ class _PlayerPageState extends State<PlayerPage> {
       setState(() => _error = e);
     }));
     _subs.add(player.stream.completed.listen((c) {
-      if (c && !widget.live) {
-        Store.removeProgress(widget.key2);
-        if (mounted) Navigator.of(context).maybePop();
+      if (c && !widget.live && !_leaving) {
+        if (widget.next != null) {
+          _playNext();
+        } else {
+          _leaving = true;
+          Store.markWatched(widget.key2);
+          Store.removeProgress(widget.key2);
+          if (mounted) Navigator.of(context).maybePop();
+        }
       }
     }));
-    await player.open(Media(widget.url, start: start));
+    if (widget.ep != null) Store.setLastEp(widget.ep!.seriesId, widget.key2);
+    _pendingResume = start;
+    await player.open(Media(widget.url));
     if (_speed != 1.0 && !widget.live) await player.setRate(_speed);
     _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _save());
     _poke();
   }
 
+  /// Hoppar till sparad position och kontrollerar att det verkligen hamnade där.
+  Future<void> _resume(Duration to) async {
+    _resuming = true;
+    for (var i = 0; i < 5 && mounted; i++) {
+      await Future.delayed(Duration(milliseconds: i == 0 ? 250 : 1500));
+      if (!mounted) return;
+      if ((player.state.position - to).abs() < const Duration(seconds: 15)) break;
+      await player.seek(to);
+    }
+    _resuming = false;
+  }
+
+  bool get _nextVisible {
+    if (widget.next == null || _nextDismissed || _menu != null || _leaving) return false;
+    if (_dur < const Duration(minutes: 5)) return false;
+    final remain = _dur - _pos;
+    final window = _dur > const Duration(minutes: 20) ? const Duration(seconds: 90) : const Duration(seconds: 30);
+    return remain > Duration.zero && remain <= window;
+  }
+
+  void _playNext() {
+    if (_leaving || widget.next == null || !mounted) return;
+    _leaving = true;
+    Store.markWatched(widget.key2);
+    Store.removeProgress(widget.key2);
+    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => widget.next!()));
+  }
+
   void _save() {
-    if (widget.live) return;
+    if (widget.live || _leaving || _resuming || _pendingResume != null) return;
     final pos = player.state.position.inSeconds;
     final dur = player.state.duration.inSeconds;
     if (dur <= 0 || pos < 5) return;
@@ -143,7 +195,9 @@ class _PlayerPageState extends State<PlayerPage> {
       updated: DateTime.now().millisecondsSinceEpoch,
       kind: widget.kind,
       locked: widget.locked,
+      ep: widget.ep,
     ));
+    if (pos >= dur * 0.95) Store.markWatched(widget.key2);
   }
 
   void _poke() {
@@ -176,6 +230,16 @@ class _PlayerPageState extends State<PlayerPage> {
     if (e is KeyUpEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
     if (_menu != null) return KeyEventResult.ignored; // menyn sköter sina egna tangenter
+    if (_nextVisible) {
+      if (k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.mediaPlayPause) {
+        _playNext();
+        return KeyEventResult.handled;
+      }
+      if (k == LogicalKeyboardKey.arrowUp) {
+        setState(() => _nextDismissed = true);
+        return KeyEventResult.handled;
+      }
+    }
     // Meny: tryck ner när fälten syns, eller på menyknappen
     if (k == LogicalKeyboardKey.arrowDown && _showUi && e is KeyDownEvent) {
       setState(() => _menu = 'main');
@@ -228,6 +292,31 @@ class _PlayerPageState extends State<PlayerPage> {
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: TvButton(label: label, icon: icon ?? (selected ? Icons.check : null), selected: selected, autofocus: autofocus, onTap: onTap),
       );
+
+  Widget _nextCard() {
+    final remain = (_dur - _pos).inSeconds;
+    return Align(
+      alignment: Alignment.bottomRight,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(48, 48, 48, 150),
+        padding: const EdgeInsets.all(20),
+        constraints: const BoxConstraints(maxWidth: 520),
+        decoration: BoxDecoration(color: Colors.black.withAlpha(230), borderRadius: BorderRadius.circular(16), border: Border.all(color: kAccent, width: 2)),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.skip_next, color: Colors.white, size: 32),
+            const SizedBox(width: 10),
+            const Text('Spela nästa avsnitt', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
+            const Spacer(),
+            Text('$remain s', style: const TextStyle(fontSize: 18, color: Colors.white70)),
+          ]),
+          if (widget.nextLabel != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(widget.nextLabel!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, color: Colors.white))),
+          const SizedBox(height: 10),
+          const Text('OK = spela nu   ▲ = dölj', style: TextStyle(fontSize: 16, color: Colors.white60)),
+        ]),
+      ),
+    );
+  }
 
   Widget _menuPanel() {
     final tr = player.state.tracks;
@@ -380,7 +469,10 @@ class _PlayerPageState extends State<PlayerPage> {
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(48, 32, 48, 48),
                   decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black87, Colors.transparent])),
-                  child: Text(widget.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(widget.ep?.series ?? widget.title, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: Colors.white), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    if (widget.ep != null) Text('${widget.ep!.short}${widget.ep!.title.isNotEmpty ? ' · ${widget.ep!.title}' : ''}', style: const TextStyle(fontSize: 20, color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ]),
                 ),
                 const Spacer(),
                 Container(
@@ -411,6 +503,7 @@ class _PlayerPageState extends State<PlayerPage> {
               ]),
             ),
           ),
+          if (_nextVisible) _nextCard(),
           if (_menu != null) _menuPanel(),
         ]),
       ),

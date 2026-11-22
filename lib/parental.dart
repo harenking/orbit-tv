@@ -89,6 +89,51 @@ class _PinDialogState extends State<_PinDialog> {
   String _pin = '';
   String? _error;
 
+  // Knappsatsen styrs med egna fokusnoder så att piltangenterna alltid fungerar
+  static const _grid = [
+    ['1', '2', '3'],
+    ['4', '5', '6'],
+    ['7', '8', '9'],
+    ['<', '0', 'OK'],
+  ];
+  final List<List<FocusNode>> _nodes = List.generate(4, (_) => List.generate(3, (_) => FocusNode()));
+
+  @override
+  void dispose() {
+    for (final r in _nodes) {
+      for (final n in r) {
+        n.dispose();
+      }
+    }
+    super.dispose();
+  }
+
+  bool _move(int dr, int dc) {
+    var r = 1, c = 1;
+    for (var i = 0; i < 4; i++) {
+      for (var j = 0; j < 3; j++) {
+        if (_nodes[i][j].hasFocus) {
+          r = i;
+          c = j;
+        }
+      }
+    }
+    final nr = (r + dr).clamp(0, 3);
+    final nc = (c + dc).clamp(0, 2);
+    _nodes[nr][nc].requestFocus();
+    return true;
+  }
+
+  void _press(String k) {
+    if (k == '<') {
+      _back();
+    } else if (k == 'OK') {
+      _ok();
+    } else {
+      _add(k);
+    }
+  }
+
   void _add(String d) {
     if (_pin.length >= 8) return;
     setState(() {
@@ -118,11 +163,12 @@ class _PinDialogState extends State<_PinDialog> {
     Navigator.of(context).pop(_pin);
   }
 
-  Widget _key(String label, VoidCallback onTap, {bool autofocus = false, IconData? icon}) {
+  Widget _key(String label, VoidCallback onTap, {bool autofocus = false, IconData? icon, FocusNode? node}) {
     return Padding(
       padding: const EdgeInsets.all(4),
       child: Tv(
         autofocus: autofocus,
+        focusNode: node,
         onTap: onTap,
         builder: (c, f) => Container(
           width: 76,
@@ -139,9 +185,10 @@ class _PinDialogState extends State<_PinDialog> {
   Widget build(BuildContext context) {
     return Focus(
       onKeyEvent: (n, e) {
-        if (e is! KeyDownEvent) return KeyEventResult.ignored;
+        if (e is KeyUpEvent) return KeyEventResult.ignored;
+        final isDown = e is KeyDownEvent;
         final ch = e.character;
-        if (ch != null && RegExp(r'^[0-9]$').hasMatch(ch)) {
+        if (isDown && ch != null && RegExp(r'^[0-9]$').hasMatch(ch)) {
           _add(ch);
           return KeyEventResult.handled;
         }
@@ -149,6 +196,11 @@ class _PinDialogState extends State<_PinDialog> {
           _back();
           return KeyEventResult.handled;
         }
+        final k = e.logicalKey;
+        if (k == LogicalKeyboardKey.arrowUp && _move(-1, 0)) return KeyEventResult.handled;
+        if (k == LogicalKeyboardKey.arrowDown && _move(1, 0)) return KeyEventResult.handled;
+        if (k == LogicalKeyboardKey.arrowLeft && _move(0, -1)) return KeyEventResult.handled;
+        if (k == LogicalKeyboardKey.arrowRight && _move(0, 1)) return KeyEventResult.handled;
         return KeyEventResult.ignored;
       },
       child: AlertDialog(
@@ -160,13 +212,12 @@ class _PinDialogState extends State<_PinDialog> {
             if (widget.hint != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(widget.hint!, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center)),
             Text(_pin.isEmpty ? '–' : '•' * _pin.length, style: const TextStyle(fontSize: 34, letterSpacing: 6)),
             SizedBox(height: 22, child: Text(_error ?? '', style: const TextStyle(color: Colors.redAccent))),
-            for (final row in const [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']])
-              Row(mainAxisAlignment: MainAxisAlignment.center, children: [for (final d in row) _key(d, () => _add(d), autofocus: d == '5')]),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              _key('', _back, icon: Icons.backspace_outlined),
-              _key('0', () => _add('0')),
-              _key('OK', _ok),
-            ]),
+            for (var r = 0; r < 4; r++)
+              Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                for (var c = 0; c < 3; c++)
+                  _key(_grid[r][c] == '<' ? '' : _grid[r][c], () => _press(_grid[r][c]),
+                      autofocus: r == 1 && c == 1, node: _nodes[r][c], icon: _grid[r][c] == '<' ? Icons.backspace_outlined : null),
+              ]),
           ]),
         ),
       ),

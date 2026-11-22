@@ -208,8 +208,17 @@ class _SettingsPageState extends State<SettingsPage> {
             const Padding(padding: EdgeInsets.only(top: 8), child: Text('Reglerna, nyckelorden och de låsta kategorierna är dolda. Lås upp med PIN för att se och ändra dem.', style: TextStyle(color: Colors.white70, fontSize: 16))),
         ],
 
+        if (Store.errors.isNotEmpty) ...[
+          _head('Senaste fel (för felsökning)'),
+          for (final e in Store.errors.reversed.take(6)) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(e, style: const TextStyle(fontSize: 13, color: Colors.white60))),
+          Align(alignment: Alignment.centerLeft, child: TvButton(label: 'Rensa fellogg', icon: Icons.delete_outline, onTap: () async {
+            await Store.clearErrors();
+            if (mounted) setState(() {});
+          })),
+        ],
+
         _head('Om Orbit IPTV'),
-        const Text('Version 0.3', style: TextStyle(fontSize: 18, color: Colors.white70)),
+        const Text('Version 0.4', style: TextStyle(fontSize: 18, color: Colors.white70)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'api.dart';
 import 'open.dart';
 import 'parental.dart';
-import 'player_page.dart';
 import 'storage.dart';
 import 'tv.dart';
 
@@ -13,6 +12,7 @@ class PosterCard extends StatelessWidget {
   final double width;
   final double aspect; // höjd/bredd för bilden
   final double? progress;
+  final String? subtitle;
   final bool fav;
   final BoxFit fit;
   final VoidCallback onTap;
@@ -26,6 +26,7 @@ class PosterCard extends StatelessWidget {
     this.width = 150,
     this.aspect = 1.45,
     this.progress,
+    this.subtitle,
     this.fav = false,
     this.fit = BoxFit.cover,
   });
@@ -53,7 +54,10 @@ class PosterCard extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.all(8),
-                child: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: Colors.white)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Text(title, maxLines: subtitle == null ? 2 : 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600)),
+                  if (subtitle != null) Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: kAccent)),
+                ]),
               ),
             ]),
           ),
@@ -169,11 +173,12 @@ class _HomeTabState extends State<HomeTab> {
           _Row(title: 'Fortsätt titta', cards: [
             for (final p in cont)
               PosterCard(
-                title: p.title,
-                poster: p.poster,
+                title: progressLabels(p).$1,
+                subtitle: p.ep != null ? p.ep!.short : 'Film · ${fmtTime(p.posSec)} av ${fmtTime(p.durSec)}',
+                poster: p.ep?.poster ?? p.poster,
                 progress: p.durSec > 0 ? p.posSec / p.durSec : null,
                 onTap: () async {
-                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => PlayerPage(url: p.url, title: p.title, key2: p.key, poster: p.poster, kind: p.kind, locked: p.locked)));
+                  await openProgress(context, widget.api, p);
                   if (mounted) setState(() {});
                 },
               ),

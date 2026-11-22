@@ -11,8 +11,9 @@ class Tv extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onLongPress; // håll OK nedan på fjärrkontrollen
   final bool autofocus;
+  final FocusNode? focusNode;
   final BorderRadius radius;
-  const Tv({super.key, required this.builder, this.onTap, this.onLongPress, this.autofocus = false, this.radius = const BorderRadius.all(Radius.circular(12))});
+  const Tv({super.key, required this.builder, this.onTap, this.onLongPress, this.autofocus = false, this.focusNode, this.radius = const BorderRadius.all(Radius.circular(12))});
 
   @override
   State<Tv> createState() => _TvState();
@@ -52,6 +53,7 @@ class _TvState extends State<Tv> {
       onKeyEvent: _key,
       child: InkWell(
       autofocus: widget.autofocus,
+      focusNode: widget.focusNode,
       borderRadius: widget.radius,
       onTap: widget.onTap,
       onLongPress: widget.onLongPress,
@@ -82,12 +84,14 @@ class TvButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool selected;
   final bool autofocus;
-  const TvButton({super.key, required this.label, required this.onTap, this.icon, this.selected = false, this.autofocus = false});
+  final FocusNode? focusNode;
+  const TvButton({super.key, required this.label, required this.onTap, this.icon, this.selected = false, this.autofocus = false, this.focusNode});
 
   @override
   Widget build(BuildContext context) {
     return Tv(
       autofocus: autofocus,
+      focusNode: focusNode,
       onTap: onTap,
       radius: BorderRadius.circular(24),
       builder: (c, f) => Container(
@@ -117,7 +121,7 @@ String fmtTime(int sec) {
 Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover}) {
   final ph = Container(width: w, height: h, color: Colors.white10, child: const Center(child: Icon(Icons.movie_outlined, color: Colors.white24, size: 40)));
   if (url == null || !url.startsWith('http')) return ph;
-  return Image.network(url, width: w, height: h, fit: fit, errorBuilder: (_, __, ___) => ph, loadingBuilder: (c, child, p) => p == null ? child : ph);
+  return Image.network(url, width: w, height: h, fit: fit, cacheWidth: 360, errorBuilder: (_, __, ___) => ph, loadingBuilder: (c, child, p) => p == null ? child : ph);
 }
 
 /// Låter upp/ner på fjärrkontrollen flytta markeringen även när en textruta har fokus
