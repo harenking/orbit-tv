@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'proxy.dart';
 import 'storage.dart';
 import 'tv.dart';
 
@@ -28,7 +27,7 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage> {
-  late final Player player = Player(configuration: const PlayerConfiguration(bufferSize: 32 * 1024 * 1024));
+  late final Player player = Player(configuration: const PlayerConfiguration(bufferSize: 16 * 1024 * 1024));
   late final VideoController controller = VideoController(player);
   final FocusNode _focus = FocusNode();
 
@@ -51,8 +50,6 @@ class _PlayerPageState extends State<PlayerPage> {
   // Nästa avsnitt
   bool _nextDismissed = false;
   bool _leaving = false;
-  String? _localUrl;
-  bool _triedProxy = false;
 
   // Meny (undertexter, ljud, hastighet, favorit)
   String? _menu; // null | main | subs | audio | speed
@@ -133,11 +130,6 @@ class _PlayerPageState extends State<PlayerPage> {
     }));
     _subs.add(player.stream.error.listen((e) {
       if (!mounted) return;
-      // Direktuppspelning misslyckades (t.ex. 502): försök igen via den lokala strömväxeln
-      if (!widget.live && !_triedProxy && _localUrl == null) {
-        _viaProxy(resumeAt: _pos > const Duration(seconds: 10) ? _pos : _startAt);
-        return;
-      }
       setState(() => _error = e);
     }));
     _subs.add(player.stream.completed.listen((c) {
@@ -154,14 +146,8 @@ class _PlayerPageState extends State<PlayerPage> {
     }));
     if (widget.ep != null) Store.setLastEp(widget.ep!.seriesId, widget.key2);
     _pendingResume = start;
-    _startAt = start;
     // Filmer och avsnitt går via den lokala strömväxeln (en anslutning, nya försök, VLC som User-Agent)
-    // Standard: direkt (snabb spolning). Strömväxeln används bara vid fel, eller om man valt det i Inställningar.
-    if (!widget.live && Store.streamMode == 'always') {
-      await _viaProxy(resumeAt: start, first: true);
-    } else {
-      await player.open(Media(widget.url, httpHeaders: const {'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20'}));
-    }
+    await player.open(Media(widget.url));
     if (_speed != 1.0 && !widget.live) await player.setRate(_speed);
     _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _save());
     _poke();
@@ -193,22 +179,6 @@ class _PlayerPageState extends State<PlayerPage> {
     Store.markWatched(widget.key2);
     Store.removeProgress(widget.key2);
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => widget.next!()));
-  }
-
-  Duration? _startAt;
-
-  Future<void> _viaProxy({Duration? resumeAt, bool first = false}) async {
-    _triedProxy = true;
-    if (!first && mounted) setState(() => _buffering = true);
-    try {
-      final ext = widget.url.split('?').first.split('.').last.toLowerCase();
-      final local = await StreamProxy.open(widget.url, ext: ext);
-      _localUrl = local;
-      _pendingResume = resumeAt;
-      await player.open(Media(local));
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    }
   }
 
   void _save() {
@@ -438,7 +408,6 @@ class _PlayerPageState extends State<PlayerPage> {
       s.cancel();
     }
     player.dispose();
-    if (_localUrl != null) StreamProxy.close(_localUrl!);
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();

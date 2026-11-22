@@ -196,15 +196,22 @@ class Store {
   }
 
   // ---------- Favoriter ----------
+  static String? _favRaw;
+  static Map<String, Fav> _favCache = {};
   static Map<String, Fav> _favAll() {
     final s = _p.getString('favs');
     if (s == null) return {};
-    try {
-      final m = jsonDecode(s) as Map<String, dynamic>;
-      return m.map((k, v) => MapEntry(k, Fav.fromJson(v as Map<String, dynamic>)));
-    } catch (_) {
-      return {};
+    // Tolkas bara om texten ändrats – annars blir bläddring i långa listor tung
+    if (s != _favRaw) {
+      try {
+        final m = jsonDecode(s) as Map<String, dynamic>;
+        _favCache = m.map((k, v) => MapEntry(k, Fav.fromJson(v as Map<String, dynamic>)));
+      } catch (_) {
+        _favCache = {};
+      }
+      _favRaw = s;
     }
+    return Map.of(_favCache);
   }
 
   static Future<void> _favWrite(Map<String, Fav> m) => _p.setString('favs', jsonEncode(m.map((k, v) => MapEntry(k, v.toJson()))));
@@ -224,11 +231,6 @@ class Store {
     await _favWrite(m);
     return on;
   }
-
-  // ---------- Strömning ----------
-  /// auto = direkt, växel bara vid fel · always = alltid via lokal strömväxel
-  static String get streamMode => _p.getString('streamMode') ?? 'auto';
-  static Future<void> setStreamMode(String v) => _p.setString('streamMode', v);
 
   // ---------- Undertexter ----------
   static bool get autoSubs => _p.getBool('autoSubs') ?? false;
@@ -281,15 +283,21 @@ class Store {
   static int get unlockMinutes => _p.getInt('unlockMinutes') ?? 15;
   static Future<void> setUnlockMinutes(int v) => _p.setInt('unlockMinutes', v);
 
+  static String? _progRaw;
+  static Map<String, Progress> _progCache = {};
   static Map<String, Progress> _all() {
     final s = _p.getString('progress');
     if (s == null) return {};
-    try {
-      final m = jsonDecode(s) as Map<String, dynamic>;
-      return m.map((k, v) => MapEntry(k, Progress.fromJson(v as Map<String, dynamic>)));
-    } catch (_) {
-      return {};
+    if (s != _progRaw) {
+      try {
+        final m = jsonDecode(s) as Map<String, dynamic>;
+        _progCache = m.map((k, v) => MapEntry(k, Progress.fromJson(v as Map<String, dynamic>)));
+      } catch (_) {
+        _progCache = {};
+      }
+      _progRaw = s;
     }
+    return Map.of(_progCache);
   }
 
   static Future<void> _write(Map<String, Progress> m) => _p.setString('progress', jsonEncode(m.map((k, v) => MapEntry(k, v.toJson()))));

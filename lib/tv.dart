@@ -121,7 +121,7 @@ String fmtTime(int sec) {
 Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover}) {
   final ph = Container(width: w, height: h, color: Colors.white10, child: const Center(child: Icon(Icons.movie_outlined, color: Colors.white24, size: 40)));
   if (url == null || !url.startsWith('http')) return ph;
-  return Image.network(url, width: w, height: h, fit: fit, cacheWidth: 360, errorBuilder: (_, __, ___) => ph, loadingBuilder: (c, child, p) => p == null ? child : ph);
+  return Image.network(url, width: w, height: h, fit: fit, cacheWidth: 240, filterQuality: FilterQuality.low, errorBuilder: (_, __, ___) => ph, loadingBuilder: (c, child, p) => p == null ? child : ph);
 }
 
 /// Låter upp/ner på fjärrkontrollen flytta markeringen även när en textruta har fokus
