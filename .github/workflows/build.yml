@@ -36,6 +36,13 @@ jobs:
       - name: Analysera koden
         run: flutter analyze --no-fatal-infos --no-fatal-warnings > analyze.txt 2>&1 || true
 
+      # Samma signeringsnyckel varje bygge, så att nya versioner kan installeras över de gamla
+      # (utan den måste appen avinstalleras och inloggningen försvinner).
+      - name: Använd fast signeringsnyckel
+        run: |
+          mkdir -p ~/.android
+          cp tool/orbit-signing.keystore ~/.android/debug.keystore
+
       - name: Bygg APK
         run: |
           set -o pipefail
