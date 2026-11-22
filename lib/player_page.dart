@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'proxy.dart';
 import 'storage.dart';
 import 'tv.dart';
 
@@ -50,6 +51,7 @@ class _PlayerPageState extends State<PlayerPage> {
   // Nästa avsnitt
   bool _nextDismissed = false;
   bool _leaving = false;
+  String? _localUrl;
 
   // Meny (undertexter, ljud, hastighet, favorit)
   String? _menu; // null | main | subs | audio | speed
@@ -146,7 +148,22 @@ class _PlayerPageState extends State<PlayerPage> {
     }));
     if (widget.ep != null) Store.setLastEp(widget.ep!.seriesId, widget.key2);
     _pendingResume = start;
-    await player.open(Media(widget.url));
+    // Filmer och avsnitt går via den lokala strömväxeln (en anslutning, nya försök, VLC som User-Agent)
+    var playUrl = widget.url;
+    Map<String, String>? headers;
+    if (widget.live) {
+      headers = {'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20'};
+    } else {
+      try {
+        final ext = widget.url.split('?').first.split('.').last.toLowerCase();
+        playUrl = await StreamProxy.open(widget.url, ext: ext);
+        _localUrl = playUrl;
+      } catch (_) {
+        playUrl = widget.url;
+        headers = {'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20'};
+      }
+    }
+    await player.open(Media(playUrl, httpHeaders: headers));
     if (_speed != 1.0 && !widget.live) await player.setRate(_speed);
     _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _save());
     _poke();
@@ -407,6 +424,7 @@ class _PlayerPageState extends State<PlayerPage> {
       s.cancel();
     }
     player.dispose();
+    if (_localUrl != null) StreamProxy.close(_localUrl!);
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
