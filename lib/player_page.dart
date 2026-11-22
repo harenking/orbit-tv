@@ -287,7 +287,10 @@ class _PlayerPageState extends State<PlayerPage> {
         }
         children.add(_opt('Stäng', false, _closeMenu, icon: Icons.close));
     }
-    return Align(
+    return FocusScope(
+      key: ValueKey('menu-$_menu'),
+      autofocus: true,
+      child: Align(
       alignment: Alignment.centerRight,
       child: Container(
         width: 420,
@@ -302,7 +305,7 @@ class _PlayerPageState extends State<PlayerPage> {
           ]),
         ),
       ),
-    );
+    ));
   }
 
   @override
