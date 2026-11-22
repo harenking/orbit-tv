@@ -144,7 +144,7 @@ class _BrowsePageState extends State<BrowsePage> {
         child: Column(children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 24, 8),
-            child: TvField(controller: _searchCtl, label: 'Sök i kategorin… (håll in OK på en titel = favorit)', icon: Icons.search, onChanged: (v) => setState(() => _filter = v)),
+            child: TvField(controller: _searchCtl, label: _cat?.id == _allId ? 'Sök bland alla titlar… (håll in OK på en titel = favorit)' : 'Sök i kategorin… (håll in OK på en titel = favorit)', icon: Icons.search, onChanged: (v) => setState(() => _filter = v)),
           ),
           Expanded(
             child: _items == null
