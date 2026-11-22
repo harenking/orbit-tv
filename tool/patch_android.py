@@ -28,6 +28,9 @@ if 'LEANBACK_LAUNCHER' not in s:
         count=1,
     )
 
+if 'android:banner' not in s:
+    s = s.replace('<application', '<application android:banner="@drawable/banner"', 1)
+
 s = s.replace('android:label="orbit_tv"', 'android:label="Orbit IPTV"')
 
 p.write_text(s, encoding='utf-8')
