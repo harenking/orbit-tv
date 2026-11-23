@@ -248,6 +248,10 @@ class Store {
 
 
   // ---------- Inställningar ----------
+  /// Hur videon avkodas och visas. 'hw' = direkt via TV:ns hårdvara (minst minne, stabilast på TV),
+  /// 'gpu' = via grafikkretsen (mpv:s standard), 'sw' = mjukvara (långsammast men fungerar med allt).
+  static String get videoMode => _p.getString('videoMode') ?? 'hw';
+  static Future<void> setVideoMode(String v) => _p.setString('videoMode', v);
   static int get seekStep => _p.getInt('seekStep') ?? 10;
   static Future<void> setSeekStep(int v) => _p.setInt('seekStep', v);
   static bool get autoResume => _p.getBool('autoResume') ?? true;

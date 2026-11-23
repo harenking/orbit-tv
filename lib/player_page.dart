@@ -28,7 +28,21 @@ class PlayerPage extends StatefulWidget {
 
 class _PlayerPageState extends State<PlayerPage> {
   late final Player player = Player(configuration: const PlayerConfiguration(bufferSize: 16 * 1024 * 1024));
-  late final VideoController controller = VideoController(player);
+  late final VideoController controller = VideoController(player, configuration: _videoConfig());
+
+  /// Standardläget i media_kit (vo=gpu) ritar videon via OpenGL i mpv. På flera TV-kretsar kraschar
+  /// det i inbyggd kod. 'hw' låter TV:ns egen videoavkodare visa bilden direkt – samma väg som TV:ns
+  /// inbyggda spelare – vilket också sparar mycket minne.
+  static VideoControllerConfiguration _videoConfig() {
+    switch (Store.videoMode) {
+      case 'gpu':
+        return const VideoControllerConfiguration(vo: 'gpu', hwdec: 'mediacodec-copy');
+      case 'sw':
+        return const VideoControllerConfiguration(vo: 'gpu', hwdec: 'no', enableHardwareAcceleration: false);
+      default:
+        return const VideoControllerConfiguration(vo: 'mediacodec_embed', hwdec: 'mediacodec');
+    }
+  }
   final FocusNode _focus = FocusNode();
 
   bool _showUi = true;
@@ -466,7 +480,7 @@ class _PlayerPageState extends State<PlayerPage> {
                 padding: const EdgeInsets.all(24),
                 margin: const EdgeInsets.all(48),
                 decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(16)),
-                child: Text('Kunde inte spela upp:\n$_error', style: const TextStyle(fontSize: 22, color: Colors.white), textAlign: TextAlign.center),
+                child: Text('Kunde inte spela upp:\n$_error\n\nFungerar det inte? Prova ett annat Videoläge under Inställningar.', style: const TextStyle(fontSize: 22, color: Colors.white), textAlign: TextAlign.center),
               ),
             ),
           AnimatedOpacity(

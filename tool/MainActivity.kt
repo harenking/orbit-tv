@@ -31,6 +31,35 @@ class MainActivity : FlutterActivity() {
                         } catch (err: Exception) {
                             trace = null
                         }
+                    } else if (x.reason == ApplicationExitInfo.REASON_CRASH_NATIVE) {
+                        // Inbyggda krascher ger en binär "tombstone". Plocka ut de läsbara raderna
+                        // (signal, bibliotek och funktionsnamn) så att det syns var kraschen skedde.
+                        try {
+                            val bytes = x.traceInputStream?.use { it.readBytes() }
+                            if (bytes != null) {
+                                val sb = StringBuilder()
+                                val cur = StringBuilder()
+                                for (b in bytes) {
+                                    val c = b.toInt() and 0xff
+                                    if (c in 32..126) {
+                                        cur.append(c.toChar())
+                                    } else {
+                                        if (cur.length >= 6) sb.append(cur).append('\n')
+                                        cur.setLength(0)
+                                    }
+                                    if (sb.length > 6000) break
+                                }
+                                if (cur.length >= 6) sb.append(cur)
+                                trace = sb.toString().lines()
+                                    .filter { it.contains(".so") || it.contains("SIG") || it.contains("signal") || it.contains("Abort") || it.contains("Cause") }
+                                    .distinct()
+                                    .take(25)
+                                    .joinToString("\n")
+                                    .take(3000)
+                            }
+                        } catch (err: Exception) {
+                            trace = null
+                        }
                     }
                     mapOf(
                         "reason" to x.reason,

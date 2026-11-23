@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -119,29 +121,79 @@ String fmtTime(int sec) {
   return h > 0 ? '$h:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
 }
 
+/// Små TMDB-bilder (w92–w342) blir suddiga när de förstoras på TV:n. Hämta w500 i stället.
+String _sharperUrl(String url) {
+  final m = RegExp(r'(image\.tmdb\.org/t/p/)w(\d+)(_and_h\d+_[a-z0-9]+)?/').firstMatch(url);
+  if (m == null) return url;
+  final w = int.tryParse(m.group(2)!) ?? 0;
+  if (w >= 500) return url;
+  return url.replaceRange(m.start, m.end, '${m.group(1)}w500/');
+}
+
 Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover}) {
   final ph = Container(width: w, height: h, color: Colors.white10, child: const Center(child: Icon(Icons.movie_outlined, color: Colors.white24, size: 40)));
   if (url == null || !url.startsWith('http')) return ph;
-  // Bilden laddas ner till disk (inte till minnet) och avkodas i exakt den storlek rutan har på skärmen.
-  // Skarp bild utan att hela originalfilen ligger i minnet – det var det som fick appen att stängas vid bläddring.
+  // Originalet sparas på disk. I minnet avkodas bilden i exakt den storlek rutan har på skärmen,
+  // med hänsyn till bildens egna proportioner – så den blir skarp utan att ta mycket minne.
+  // (Tidigare avkodades bara efter bredden: en liggande bild i en stående ruta blev då för liten
+  // och förstorades upp, vilket gjorde den suddig.)
   return LayoutBuilder(builder: (context, c) {
     final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
-    final logical = w ?? (c.hasBoundedWidth ? c.maxWidth : 200.0);
-    final px = (logical * dpr).round().clamp(120, 720);
-    return CachedNetworkImage(
-      imageUrl: url,
+    final lw = w ?? (c.hasBoundedWidth ? c.maxWidth : 200.0);
+    final lh = h ?? (c.hasBoundedHeight ? c.maxHeight : lw * 1.5);
+    final pw = (lw * dpr).round().clamp(64, 1200);
+    final phh = (lh * dpr).round().clamp(64, 1200);
+    return Image(
+      image: _BoxResizeImage(CachedNetworkImageProvider(_sharperUrl(url)), pw, phh, cover: fit == BoxFit.cover),
       width: w,
       height: h,
       fit: fit,
-      memCacheWidth: px,
-      maxWidthDiskCache: 720,
       filterQuality: FilterQuality.medium,
-      fadeInDuration: const Duration(milliseconds: 120),
-      fadeOutDuration: Duration.zero,
-      placeholder: (_, __) => ph,
-      errorWidget: (_, __, ___) => ph,
+      gaplessPlayback: true,
+      frameBuilder: (context, child, frame, sync) => (frame == null && !sync) ? ph : child,
+      errorBuilder: (_, __, ___) => ph,
     );
   });
+}
+
+class _BoxKey {
+  final Object inner;
+  final int w;
+  final int h;
+  final bool cover;
+  const _BoxKey(this.inner, this.w, this.h, this.cover);
+  @override
+  bool operator ==(Object o) => o is _BoxKey && o.inner == inner && o.w == w && o.h == h && o.cover == cover;
+  @override
+  int get hashCode => Object.hash(inner, w, h, cover);
+}
+
+/// Avkodar bilden så att den precis täcker (cover) eller ryms i (contain) rutan, med bevarade proportioner.
+/// Bilder förstoras aldrig vid avkodningen, bara förminskas.
+class _BoxResizeImage extends ImageProvider<_BoxKey> {
+  final ImageProvider<Object> inner;
+  final int w;
+  final int h;
+  final bool cover;
+  const _BoxResizeImage(this.inner, this.w, this.h, {required this.cover});
+
+  @override
+  Future<_BoxKey> obtainKey(ImageConfiguration configuration) async => _BoxKey(await inner.obtainKey(configuration), w, h, cover);
+
+  @override
+  ImageStreamCompleter loadImage(_BoxKey key, ImageDecoderCallback decode) {
+    Future<ui.Codec> decodeSized(ui.ImmutableBuffer buffer, {ui.TargetImageSizeCallback? getTargetSize}) {
+      return decode(buffer, getTargetSize: (int iw, int ih) {
+        if (iw <= 0 || ih <= 0) return ui.TargetImageSize(width: w);
+        final sx = w / iw;
+        final sy = h / ih;
+        final s = math.min(1.0, cover ? math.max(sx, sy) : math.min(sx, sy));
+        return ui.TargetImageSize(width: math.max(1, (iw * s).round()), height: math.max(1, (ih * s).round()));
+      });
+    }
+
+    return inner.loadImage(key.inner, decodeSized);
+  }
 }
 
 /// Låter upp/ner på fjärrkontrollen flytta markeringen även när en textruta har fokus

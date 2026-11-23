@@ -141,6 +141,9 @@ class _SettingsPageState extends State<SettingsPage> {
           if (mounted) setState(() {});
         })),
 
+        _row('Videoläge', hint: 'Hårdvara är stabilast på TV. Byt bara om en film visar svart bild eller hackar.',
+            trailing: _choice<String>(const [('Hårdvara', 'hw'), ('Grafikkrets', 'gpu'), ('Mjukvara', 'sw')], Store.videoMode, Store.setVideoMode)),
+
         _row('Standardhastighet', trailing: _choice<double>(const [('0,75×', 0.75), ('1×', 1.0), ('1,25×', 1.25), ('1,5×', 1.5)], Store.defaultSpeed, Store.setDefaultSpeed)),
 
         _head('Undertexter'),
@@ -226,6 +229,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: TextStyle(fontSize: 14, color: e.isProblem ? Colors.orangeAccent : Colors.white60),
                   ),
                 ),
+              // Var den senaste inbyggda kraschen skedde (bibliotek/funktion), för felsökning
+              if (l.any((e) => e.reason == 5 && (e.trace ?? '').trim().isNotEmpty))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                  child: Text(
+                    'Detaljer om senaste kraschen:\n${l.firstWhere((e) => e.reason == 5 && (e.trace ?? '').trim().isNotEmpty).trace!.split('\n').take(10).join('\n')}',
+                    style: const TextStyle(fontSize: 12, color: Colors.white54),
+                  ),
+                ),
             ]);
           },
         ),
@@ -239,7 +251,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
 
         _head('Om Orbit IPTV'),
-        const Text('Version 0.5', style: TextStyle(fontSize: 18, color: Colors.white70)),
+        const Text('Version 0.6', style: TextStyle(fontSize: 18, color: Colors.white70)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
