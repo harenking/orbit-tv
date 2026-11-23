@@ -35,3 +35,9 @@ s = s.replace('android:label="orbit_tv"', 'android:label="Orbit IPTV"')
 
 p.write_text(s, encoding='utf-8')
 print('AndroidManifest.xml patchad')
+
+# Egen MainActivity som kan läsa ut varför appen senast stängdes
+ma = Path('android/app/src/main/kotlin/se/orbit/orbit_tv/MainActivity.kt')
+ma.parent.mkdir(parents=True, exist_ok=True)
+ma.write_text(Path('tool/MainActivity.kt').read_text(encoding='utf-8'), encoding='utf-8')
+print('MainActivity.kt ersatt')

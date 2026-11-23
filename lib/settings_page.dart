@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'diagnostics.dart';
 import 'parental.dart';
 import 'storage.dart';
 import 'tv.dart';
@@ -33,6 +34,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   bool get _canEdit => !Store.hasPin || Guard.unlocked;
+  final Future<List<ExitInfo>> _exits = Diagnostics.lastExits();
 
   Future<void> _loadCats() async {
     if (_catsLoaded) return;
@@ -208,6 +210,25 @@ class _SettingsPageState extends State<SettingsPage> {
             const Padding(padding: EdgeInsets.only(top: 8), child: Text('Reglerna, nyckelorden och de låsta kategorierna är dolda. Lås upp med PIN för att se och ändra dem.', style: TextStyle(color: Colors.white70, fontSize: 16))),
         ],
 
+        _head('Senaste avslut (felsökning)'),
+        FutureBuilder<List<ExitInfo>>(
+          future: _exits,
+          builder: (c, snap) {
+            final l = snap.data ?? const <ExitInfo>[];
+            if (snap.connectionState != ConnectionState.done) return const Text('Hämtar…', style: TextStyle(color: Colors.white60));
+            if (l.isEmpty) return const Text('Inga avslut registrerade.', style: TextStyle(color: Colors.white60, fontSize: 15));
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              for (final e in l)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '${e.time.toString().substring(0, 16)}  ${e.label}${e.desc.isNotEmpty ? ' – ${e.desc}' : ''}  (minne ${(e.pssKb / 1024).round()} MB)',
+                    style: TextStyle(fontSize: 14, color: e.isProblem ? Colors.orangeAccent : Colors.white60),
+                  ),
+                ),
+            ]);
+          },
+        ),
         if (Store.errors.isNotEmpty) ...[
           _head('Senaste fel (för felsökning)'),
           for (final e in Store.errors.reversed.take(6)) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(e, style: const TextStyle(fontSize: 13, color: Colors.white60))),
@@ -218,7 +239,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
 
         _head('Om Orbit IPTV'),
-        const Text('Version 0.4', style: TextStyle(fontSize: 18, color: Colors.white70)),
+        const Text('Version 0.5', style: TextStyle(fontSize: 18, color: Colors.white70)),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),

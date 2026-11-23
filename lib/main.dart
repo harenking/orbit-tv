@@ -18,8 +18,8 @@ Future<void> main() async {
   await Store.init();
   // Begränsa bildcachen – TV-boxar har lite minne och Android stänger appen när det tar slut
   PaintingBinding.instance.imageCache
-    ..maximumSize = 150
-    ..maximumSizeBytes = 40 * 1024 * 1024;
+    ..maximumSize = 200
+    ..maximumSizeBytes = 64 * 1024 * 1024;
   // Oväntade fel loggas och visas i Inställningar i stället för att krascha appen
   FlutterError.onError = (d) {
     FlutterError.presentError(d);

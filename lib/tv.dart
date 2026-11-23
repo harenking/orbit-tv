@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -121,7 +122,26 @@ String fmtTime(int sec) {
 Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover}) {
   final ph = Container(width: w, height: h, color: Colors.white10, child: const Center(child: Icon(Icons.movie_outlined, color: Colors.white24, size: 40)));
   if (url == null || !url.startsWith('http')) return ph;
-  return Image.network(url, width: w, height: h, fit: fit, cacheWidth: 240, filterQuality: FilterQuality.low, errorBuilder: (_, __, ___) => ph, loadingBuilder: (c, child, p) => p == null ? child : ph);
+  // Bilden laddas ner till disk (inte till minnet) och avkodas i exakt den storlek rutan har på skärmen.
+  // Skarp bild utan att hela originalfilen ligger i minnet – det var det som fick appen att stängas vid bläddring.
+  return LayoutBuilder(builder: (context, c) {
+    final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+    final logical = w ?? (c.hasBoundedWidth ? c.maxWidth : 200.0);
+    final px = (logical * dpr).round().clamp(120, 720);
+    return CachedNetworkImage(
+      imageUrl: url,
+      width: w,
+      height: h,
+      fit: fit,
+      memCacheWidth: px,
+      maxWidthDiskCache: 720,
+      filterQuality: FilterQuality.medium,
+      fadeInDuration: const Duration(milliseconds: 120),
+      fadeOutDuration: Duration.zero,
+      placeholder: (_, __) => ph,
+      errorWidget: (_, __, ___) => ph,
+    );
+  });
 }
 
 /// Låter upp/ner på fjärrkontrollen flytta markeringen även när en textruta har fokus

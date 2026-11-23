@@ -148,7 +148,11 @@ class _PlayerPageState extends State<PlayerPage> {
     _pendingResume = start;
     // Filmer och avsnitt går via den lokala strömväxeln (en anslutning, nya försök, VLC som User-Agent)
     await player.open(Media(widget.url));
+    // Gick användaren tillbaka medan strömmen laddade är spelaren redan stängd:
+    // då får vi inte röra den igen (det kan krascha videobiblioteket) eller starta timers som aldrig stoppas.
+    if (!mounted) return;
     if (_speed != 1.0 && !widget.live) await player.setRate(_speed);
+    if (!mounted) return;
     _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _save());
     _poke();
   }
@@ -173,16 +177,20 @@ class _PlayerPageState extends State<PlayerPage> {
     return remain > Duration.zero && remain <= window;
   }
 
-  void _playNext() {
+  Future<void> _playNext() async {
     if (_leaving || widget.next == null || !mounted) return;
     _leaving = true;
     Store.markWatched(widget.key2);
     Store.removeProgress(widget.key2);
+    try {
+      await player.stop();
+    } catch (_) {}
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => widget.next!()));
   }
 
   void _save() {
-    if (widget.live || _leaving || _resuming || _pendingResume != null) return;
+    if (!mounted || widget.live || _leaving || _resuming || _pendingResume != null) return;
     final pos = player.state.position.inSeconds;
     final dur = player.state.duration.inSeconds;
     if (dur <= 0 || pos < 5) return;
@@ -221,7 +229,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _seekTimer?.cancel();
     _seekTimer = Timer(const Duration(milliseconds: 600), () async {
       final target = _seekTarget;
-      if (target == null) return;
+      if (target == null || !mounted) return;
       await player.seek(target);
       if (mounted) setState(() => _seekTarget = null);
     });
