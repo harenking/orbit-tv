@@ -152,10 +152,10 @@ class _SeriesPageState extends State<SeriesPage> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(7),
                               child: SizedBox(
-                                width: 176,
-                                height: 99,
+                                width: 208,
+                                height: 117,
                                 child: Stack(fit: StackFit.expand, children: [
-                                  posterImage(e.image ?? widget.item.poster, maxW: 480, maxH: 270),
+                                  posterImage(e.image ?? widget.item.poster, wide: e.image != null),
                                   if (watched && !showProg)
                                     Container(color: Colors.black45, child: const Center(child: Icon(Icons.check_circle, color: Colors.white, size: 34))),
                                   if (isCur) const Center(child: Icon(Icons.play_circle_fill, color: Colors.white, size: 40)),

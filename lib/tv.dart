@@ -122,26 +122,26 @@ String fmtTime(int sec) {
 }
 
 /// Små TMDB-bilder (w92–w342) blir suddiga när de förstoras på TV:n. Hämta w500 i stället.
-String _sharperUrl(String url) {
+String _sharperUrl(String url, [int minW = 500]) {
   final m = RegExp(r'(image\.tmdb\.org/t/p/)w(\d+)(_and_h\d+_[a-z0-9]+)?/').firstMatch(url);
   if (m == null) return url;
   final w = int.tryParse(m.group(2)!) ?? 0;
-  if (w >= 500) return url;
-  return url.replaceRange(m.start, m.end, '${m.group(1)}w500/');
+  if (w >= minW) return url;
+  return url.replaceRange(m.start, m.end, '${m.group(1)}w$minW/');
 }
 
-Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover, int maxW = 1000, int maxH = 1000}) {
+Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover, int maxW = 1000, int maxH = 1000, bool wide = false}) {
   final ph = Container(width: w, height: h, color: Colors.white10, child: const Center(child: Icon(Icons.movie_outlined, color: Colors.white24, size: 40)));
   if (url == null || !url.startsWith('http')) return ph;
   // Som i första versionen: bilden visas i sin fulla upplösning och skalas ner av grafikkretsen
   // (det gav skarpast resultat på TV:n). Bara ovanligt stora bilder (över 1000 px) krymps vid
   // avkodningen så att minnet inte tar slut. Originalet sparas på disk så att det går snabbt nästa gång.
   return Image(
-    image: _BoxResizeImage(CachedNetworkImageProvider(_sharperUrl(url)), maxW, maxH, cover: false),
+    image: _BoxResizeImage(CachedNetworkImageProvider(_sharperUrl(url, wide ? 780 : 500)), maxW, maxH, cover: false),
     width: w,
     height: h,
     fit: fit,
-    filterQuality: FilterQuality.medium,
+    filterQuality: wide ? FilterQuality.high : FilterQuality.medium,
     gaplessPlayback: true,
     frameBuilder: (context, child, frame, sync) => (frame == null && !sync) ? ph : child,
     errorBuilder: (_, __, ___) => ph,
