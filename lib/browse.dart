@@ -177,8 +177,7 @@ class _BrowsePageState extends State<BrowsePage> {
             child: _items == null
                 ? const Center(child: CircularProgressIndicator())
                 : items.isEmpty
-                    ? Center(child: Text(_cat?.id == _recentId ? 'Inga serier än.
-Serier du tittar på hamnar här.' : 'Inget hittades', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, color: Colors.white70)))
+                    ? Center(child: Text(_cat?.id == _recentId ? 'Inga serier än.\nSerier du tittar på hamnar här.' : 'Inget hittades', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, color: Colors.white70)))
                     : GridView.builder(
                         padding: const EdgeInsets.fromLTRB(8, 8, 24, 32),
                         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
