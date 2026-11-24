@@ -133,31 +133,19 @@ String _sharperUrl(String url) {
 Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover}) {
   final ph = Container(width: w, height: h, color: Colors.white10, child: const Center(child: Icon(Icons.movie_outlined, color: Colors.white24, size: 40)));
   if (url == null || !url.startsWith('http')) return ph;
-  // Originalet sparas på disk. I minnet avkodas bilden i exakt den storlek rutan har på skärmen,
-  // med hänsyn till bildens egna proportioner – så den blir skarp utan att ta mycket minne.
-  // (Tidigare avkodades bara efter bredden: en liggande bild i en stående ruta blev då för liten
-  // och förstorades upp, vilket gjorde den suddig.)
-  return LayoutBuilder(builder: (context, c) {
-    final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
-    final lw = w ?? (c.hasBoundedWidth ? c.maxWidth : 200.0);
-    final lh = h ?? (c.hasBoundedHeight ? c.maxHeight : lw * 1.5);
-    // Minst dubbla storleken: många TV-apparater ritar gränssnittet i lägre upplösning än skärmen
-    // och uppger en för låg pixeltäthet. Små rutor (t.ex. på Hem) blev då suddiga. Bilden förstoras
-    // aldrig utöver originalet, och nedskalningen vid ritningen (mipmaps) ger skarp kant.
-    final scale = dpr < 2.0 ? 2.0 : dpr;
-    final pw = (lw * scale).round().clamp(64, 1200);
-    final phh = (lh * scale).round().clamp(64, 1200);
-    return Image(
-      image: _BoxResizeImage(CachedNetworkImageProvider(_sharperUrl(url)), pw, phh, cover: fit == BoxFit.cover),
-      width: w,
-      height: h,
-      fit: fit,
-      filterQuality: FilterQuality.medium,
-      gaplessPlayback: true,
-      frameBuilder: (context, child, frame, sync) => (frame == null && !sync) ? ph : child,
-      errorBuilder: (_, __, ___) => ph,
-    );
-  });
+  // Som i första versionen: bilden visas i sin fulla upplösning och skalas ner av grafikkretsen
+  // (det gav skarpast resultat på TV:n). Bara ovanligt stora bilder (över 1000 px) krymps vid
+  // avkodningen så att minnet inte tar slut. Originalet sparas på disk så att det går snabbt nästa gång.
+  return Image(
+    image: _BoxResizeImage(CachedNetworkImageProvider(_sharperUrl(url)), 1000, 1000, cover: false),
+    width: w,
+    height: h,
+    fit: fit,
+    filterQuality: FilterQuality.medium,
+    gaplessPlayback: true,
+    frameBuilder: (context, child, frame, sync) => (frame == null && !sync) ? ph : child,
+    errorBuilder: (_, __, ___) => ph,
+  );
 }
 
 class _BoxKey {
@@ -412,6 +400,42 @@ class _TvKeyboardState extends State<TvKeyboard> {
             TvButton(label: 'Klar', icon: Icons.check, selected: true, onTap: () => Navigator.of(context).pop()),
           ]),
         ),
+      ),
+    );
+  }
+}
+
+/// Textrad som kan markeras med fjärrkontrollen. Används för information längst ner på sidor,
+/// så att listan kan rullas ända ner (annars stannar markeringen vid sista knappen).
+class FocusLine extends StatefulWidget {
+  final Widget child;
+  const FocusLine({super.key, required this.child});
+
+  @override
+  State<FocusLine> createState() => _FocusLineState();
+}
+
+class _FocusLineState extends State<FocusLine> {
+  bool _f = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (f) {
+        setState(() => _f = f);
+        if (f) Scrollable.ensureVisible(context, alignment: 0.5, duration: const Duration(milliseconds: 150));
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: _f ? Colors.white10 : Colors.transparent,
+          border: Border.all(color: _f ? Colors.white : Colors.transparent, width: 2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: widget.child,
       ),
     );
   }

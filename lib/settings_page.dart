@@ -222,8 +222,7 @@ class _SettingsPageState extends State<SettingsPage> {
             if (l.isEmpty) return const Text('Inga avslut registrerade.', style: TextStyle(color: Colors.white60, fontSize: 15));
             return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               for (final e in l)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
+                FocusLine(
                   child: Text(
                     '${e.time.toString().substring(0, 16)}  ${e.label}${e.desc.isNotEmpty ? ' – ${e.desc}' : ''}  (minne ${(e.pssKb / 1024).round()} MB)',
                     style: TextStyle(fontSize: 14, color: e.isProblem ? Colors.orangeAccent : Colors.white60),
@@ -231,8 +230,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               // Var den senaste inbyggda kraschen skedde (bibliotek/funktion), för felsökning
               if (l.any((e) => e.reason == 5 && (e.trace ?? '').trim().isNotEmpty))
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 8),
+                FocusLine(
                   child: Text(
                     'Detaljer om senaste kraschen:\n${l.firstWhere((e) => e.reason == 5 && (e.trace ?? '').trim().isNotEmpty).trace!.split('\n').take(10).join('\n')}',
                     style: const TextStyle(fontSize: 12, color: Colors.white54),
@@ -243,7 +241,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         if (Store.errors.isNotEmpty) ...[
           _head('Senaste fel (för felsökning)'),
-          for (final e in Store.errors.reversed.take(6)) Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(e, style: const TextStyle(fontSize: 13, color: Colors.white60))),
+          for (final e in Store.errors.reversed.take(10)) FocusLine(child: Text(e, style: const TextStyle(fontSize: 13, color: Colors.white60))),
           Align(alignment: Alignment.centerLeft, child: TvButton(label: 'Rensa fellogg', icon: Icons.delete_outline, onTap: () async {
             await Store.clearErrors();
             if (mounted) setState(() {});
@@ -251,16 +249,18 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
 
         _head('Om Orbit IPTV'),
-        const Text('Version 0.7', style: TextStyle(fontSize: 18, color: Colors.white70)),
-        Builder(builder: (c) {
+        FocusLine(child: Builder(builder: (c) {
           // Skärminfo för felsökning av suddiga bilder
           final mq = MediaQuery.of(c);
           final px = mq.size * mq.devicePixelRatio;
-          return Text('Skärm: ${px.width.round()}×${px.height.round()} px, täthet ${mq.devicePixelRatio.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 14, color: Colors.white54));
-        }),
+          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Version 0.8', style: TextStyle(fontSize: 18, color: Colors.white70)),
+            Text('Skärm: ${px.width.round()}×${px.height.round()} px, täthet ${mq.devicePixelRatio.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 14, color: Colors.white54)),
+          ]);
+        })),
         const SizedBox(height: 12),
-        Container(
+        FocusLine(child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(color: kPanel, borderRadius: BorderRadius.circular(12)),
           child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -268,7 +268,7 @@ class _SettingsPageState extends State<SettingsPage> {
             SizedBox(height: 8),
             Text(kLegalShort, style: TextStyle(fontSize: 16, color: Colors.white70, height: 1.5)),
           ]),
-        ),
+        )),
       ],
     );
   }
