@@ -7,3 +7,4 @@ android/
 .flutter-plugins
 .flutter-plugins-dependencies
 pubspec.lock
+__pycache__/
