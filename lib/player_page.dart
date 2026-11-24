@@ -23,7 +23,7 @@ class PlayerPage extends StatefulWidget {
   const PlayerPage({super.key, required this.url, required this.title, required this.key2, this.poster, this.live = false, this.kind = 'movie', this.locked = false, this.fav, this.ep, this.next, this.nextLabel});
 
   @override
-  State<PlayerPage> createState() => _PlayerPageState();
+  State<PlayerPage> createState() => Store.videoMode == 'exo' ? _NativePlayerState() : _PlayerPageState();
 }
 
 class _PlayerPageState extends State<PlayerPage> {
@@ -537,4 +537,118 @@ class _PlayerPageState extends State<PlayerPage> {
       ),
     ));
   }
+}
+
+
+/// Spelar via Androids egen ExoPlayer (PlayerActivity.kt). Videon visas direkt av TV:ns
+/// videokrets i stället för att ritas via Flutter, vilket ger jämnare och skarpare bild.
+class _NativePlayerState extends State<PlayerPage> {
+  static const _ch = MethodChannel('orbit/player');
+  static _NativePlayerState? _owner;
+  bool _left = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _owner = this;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _run());
+  }
+
+  void _saveAt(int pos, int dur) {
+    final w = widget;
+    if (w.live || dur <= 0 || pos < 5) return;
+    Store.saveProgress(Progress(
+      key: w.key2,
+      title: w.title,
+      poster: w.poster,
+      url: w.url,
+      posSec: pos,
+      durSec: dur,
+      updated: DateTime.now().millisecondsSinceEpoch,
+      kind: w.kind,
+      locked: w.locked,
+      ep: w.ep,
+    ));
+    if (pos >= dur * 0.95) Store.markWatched(w.key2);
+  }
+
+  Future<dynamic> _onCall(MethodCall c) async {
+    if (_owner != this) return null;
+    switch (c.method) {
+      case 'progress':
+        final m = c.arguments as Map;
+        _saveAt((m['pos'] as num).toInt(), (m['dur'] as num).toInt());
+      case 'fav':
+        final f = widget.fav;
+        if (f != null) {
+          final want = c.arguments == true;
+          if (Store.isFav(f) != want) await Store.toggleFav(f);
+        }
+    }
+    return null;
+  }
+
+  Future<void> _run() async {
+    final w = widget;
+    final saved = (w.live || !Store.autoResume) ? null : Store.progress(w.key2);
+    var startMs = 0;
+    if (saved != null && saved.posSec > 10 && saved.durSec > 0 && saved.posSec < saved.durSec * 0.95) startMs = saved.posSec * 1000;
+    if (w.ep != null) Store.setLastEp(w.ep!.seriesId, w.key2);
+    _ch.setMethodCallHandler(_onCall);
+    Map? r;
+    try {
+      r = await _ch.invokeMethod<Map>('play', {
+        'url': w.url,
+        'title': w.ep?.series ?? w.title,
+        'sub': w.ep == null ? '' : '${w.ep!.short}${w.ep!.title.isNotEmpty ? ' · ${w.ep!.title}' : ''}',
+        'live': w.live,
+        'startMs': startMs,
+        'seekStep': Store.seekStep,
+        'speed': w.live ? 1.0 : Store.defaultSpeed,
+        'subSize': Store.subSize,
+        'subYellow': Store.subYellow,
+        'subBg': Store.subBg,
+        'autoSubs': Store.autoSubs,
+        'subLangs': _PlayerPageState._langCodes[Store.subLang] ?? [Store.subLang],
+        'hasNext': w.next != null,
+        'nextLabel': w.nextLabel ?? '',
+        'hasFav': w.fav != null,
+        'isFav': w.fav != null && Store.isFav(w.fav!),
+        'matchFps': Store.matchFps,
+      });
+    } catch (e) {
+      Store.logError('Spelare: $e');
+    }
+    if (!mounted || _left) return;
+    final action = r?['action'] as String? ?? 'back';
+    final pos = (r?['pos'] as num?)?.toInt() ?? 0;
+    final dur = (r?['dur'] as num?)?.toInt() ?? 0;
+    final err = r?['error'] as String?;
+    if (err != null && err.isNotEmpty) Store.logError('Uppspelning (${w.title}): $err');
+    _left = true;
+    if ((action == 'next' || action == 'done') && !w.live) {
+      Store.markWatched(w.key2);
+      await Store.removeProgress(w.key2);
+      if (!mounted) return;
+      if (w.next != null) {
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => w.next!()));
+        return;
+      }
+    } else {
+      _saveAt(pos, dur);
+    }
+    if (mounted) Navigator.of(context).maybePop();
+  }
+
+  @override
+  void dispose() {
+    if (_owner == this) {
+      _owner = null;
+      _ch.setMethodCallHandler(null);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(backgroundColor: Colors.black, body: Center(child: CircularProgressIndicator(color: Colors.white)));
 }

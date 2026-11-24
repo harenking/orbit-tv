@@ -3,6 +3,7 @@ package se.orbit.orbit_tv
 import android.app.ActivityManager
 import android.app.ApplicationExitInfo
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -10,8 +11,43 @@ import io.flutter.plugin.common.MethodChannel
 
 /** Ger appen Androids egen förklaring till varför den senast stängdes (minne, krasch, ANR …). */
 class MainActivity : FlutterActivity() {
+    private val reqPlayer = 4711
+    private var playerResult: MethodChannel.Result? = null
+    private var playerChannel: MethodChannel? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Androids egen videospelare (ExoPlayer) i en egen skärm
+        playerChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "orbit/player").also { ch ->
+            ch.setMethodCallHandler { call, result ->
+                if (call.method != "play") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                playerResult?.success(mapOf("action" to "back", "pos" to 0, "dur" to 0))
+                playerResult = result
+                val i = Intent(this, PlayerActivity::class.java)
+                val args = call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()
+                for ((k, v) in args) {
+                    val key = k.toString()
+                    when (v) {
+                        is String -> i.putExtra(key, v)
+                        is Boolean -> i.putExtra(key, v)
+                        is Int -> i.putExtra(key, v)
+                        is Long -> i.putExtra(key, v)
+                        is Double -> i.putExtra(key, v)
+                        is List<*> -> i.putStringArrayListExtra(key, ArrayList(v.map { it.toString() }))
+                    }
+                }
+                PlayerActivity.events = { name, data -> runOnUiThread { playerChannel?.invokeMethod(name, data) } }
+                try {
+                    startActivityForResult(i, reqPlayer)
+                } catch (err: Exception) {
+                    playerResult = null
+                    result.error("player", err.toString(), null)
+                }
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "orbit/exit").setMethodCallHandler { call, result ->
             if (call.method != "lastExits") {
                 result.notImplemented()
@@ -76,5 +112,21 @@ class MainActivity : FlutterActivity() {
                 result.error("exit", err.toString(), null)
             }
         }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != reqPlayer) return
+        val r = playerResult ?: return
+        playerResult = null
+        r.success(
+            mapOf(
+                "action" to (data?.getStringExtra("action") ?: "back"),
+                "pos" to (data?.getIntExtra("pos", 0) ?: 0),
+                "dur" to (data?.getIntExtra("dur", 0) ?: 0),
+                "error" to data?.getStringExtra("error"),
+            )
+        )
     }
 }

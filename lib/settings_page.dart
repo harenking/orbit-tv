@@ -141,8 +141,10 @@ class _SettingsPageState extends State<SettingsPage> {
           if (mounted) setState(() {});
         })),
 
-        _row('Videoläge', hint: 'Hårdvara är stabilast på TV. Byt bara om en film visar svart bild eller hackar.',
-            trailing: _choice<String>(const [('Hårdvara', 'hw'), ('Grafikkrets', 'gpu'), ('Mjukvara', 'sw')], Store.videoMode, Store.setVideoMode)),
+        _row('Videoläge', hint: 'Android-spelaren (ExoPlayer) ger jämnast och skarpast bild på TV. Byt till mpv bara om en film eller kanal inte går att spela.',
+            trailing: _choice<String>(const [('Android', 'exo'), ('mpv', 'hw'), ('mpv grafik', 'gpu'), ('mpv mjukvara', 'sw')], Store.videoMode, Store.setVideoMode)),
+        _row('Anpassa bildfrekvens', hint: 'TV:n växlar till filmens bildfrekvens (t.ex. 24 eller 50 Hz) så att rörelser inte rycker. Skärmen kan bli svart en sekund vid start. Gäller Android-spelaren.',
+            trailing: _choice<bool>(const [('På', true), ('Av', false)], Store.matchFps, Store.setMatchFps)),
 
         _row('Standardhastighet', trailing: _choice<double>(const [('0,75×', 0.75), ('1×', 1.0), ('1,25×', 1.25), ('1,5×', 1.5)], Store.defaultSpeed, Store.setDefaultSpeed)),
 
@@ -254,7 +256,7 @@ class _SettingsPageState extends State<SettingsPage> {
           final mq = MediaQuery.of(c);
           final px = mq.size * mq.devicePixelRatio;
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Version 0.10', style: TextStyle(fontSize: 18, color: Colors.white70)),
+            const Text('Version 0.11', style: TextStyle(fontSize: 18, color: Colors.white70)),
             Text('Skärm: ${px.width.round()}×${px.height.round()} px, täthet ${mq.devicePixelRatio.toStringAsFixed(2)}',
                 style: const TextStyle(fontSize: 14, color: Colors.white54)),
           ]);

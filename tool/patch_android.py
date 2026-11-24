@@ -33,6 +33,16 @@ if 'android:banner' not in s:
 
 s = s.replace('android:label="orbit_tv"', 'android:label="Orbit IPTV"')
 
+# Egen skärm för Androids videospelare (ExoPlayer)
+if 'PlayerActivity' not in s:
+    s = s.replace('</application>', '''        <activity
+            android:name=".PlayerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode|navigation|density"/>
+    </application>''', 1)
+
 p.write_text(s, encoding='utf-8')
 print('AndroidManifest.xml patchad')
 
@@ -41,3 +51,52 @@ ma = Path('android/app/src/main/kotlin/se/orbit/orbit_tv/MainActivity.kt')
 ma.parent.mkdir(parents=True, exist_ok=True)
 ma.write_text(Path('tool/MainActivity.kt').read_text(encoding='utf-8'), encoding='utf-8')
 print('MainActivity.kt ersatt')
+
+pa = ma.parent / 'PlayerActivity.kt'
+pa.write_text(Path('tool/PlayerActivity.kt').read_text(encoding='utf-8'), encoding='utf-8')
+print('PlayerActivity.kt tillagd')
+
+# Media3 (ExoPlayer) i bygget
+M3 = '1.5.1'
+kts = Path('android/app/build.gradle.kts')
+gro = Path('android/app/build.gradle')
+if kts.exists():
+    t = kts.read_text(encoding='utf-8')
+    t += f"""
+
+dependencies {{
+    implementation("androidx.media3:media3-exoplayer:{M3}")
+    implementation("androidx.media3:media3-exoplayer-hls:{M3}")
+    implementation("androidx.media3:media3-ui:{M3}")
+}}
+
+android {{
+    lint {{
+        checkReleaseBuilds = false
+        abortOnError = false
+    }}
+}}
+"""
+    kts.write_text(t, encoding='utf-8')
+    print('Media3 tillagt i build.gradle.kts')
+elif gro.exists():
+    t = gro.read_text(encoding='utf-8')
+    t += f"""
+
+dependencies {{
+    implementation 'androidx.media3:media3-exoplayer:{M3}'
+    implementation 'androidx.media3:media3-exoplayer-hls:{M3}'
+    implementation 'androidx.media3:media3-ui:{M3}'
+}}
+
+android {{
+    lint {{
+        checkReleaseBuilds false
+        abortOnError false
+    }}
+}}
+"""
+    gro.write_text(t, encoding='utf-8')
+    print('Media3 tillagt i build.gradle')
+else:
+    raise SystemExit('Hittade ingen build.gradle')
