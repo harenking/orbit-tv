@@ -251,7 +251,14 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
 
         _head('Om Orbit IPTV'),
-        const Text('Version 0.6', style: TextStyle(fontSize: 18, color: Colors.white70)),
+        const Text('Version 0.7', style: TextStyle(fontSize: 18, color: Colors.white70)),
+        Builder(builder: (c) {
+          // Skärminfo för felsökning av suddiga bilder
+          final mq = MediaQuery.of(c);
+          final px = mq.size * mq.devicePixelRatio;
+          return Text('Skärm: ${px.width.round()}×${px.height.round()} px, täthet ${mq.devicePixelRatio.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 14, color: Colors.white54));
+        }),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),

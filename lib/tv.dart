@@ -141,8 +141,12 @@ Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover
     final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
     final lw = w ?? (c.hasBoundedWidth ? c.maxWidth : 200.0);
     final lh = h ?? (c.hasBoundedHeight ? c.maxHeight : lw * 1.5);
-    final pw = (lw * dpr).round().clamp(64, 1200);
-    final phh = (lh * dpr).round().clamp(64, 1200);
+    // Minst dubbla storleken: många TV-apparater ritar gränssnittet i lägre upplösning än skärmen
+    // och uppger en för låg pixeltäthet. Små rutor (t.ex. på Hem) blev då suddiga. Bilden förstoras
+    // aldrig utöver originalet, och nedskalningen vid ritningen (mipmaps) ger skarp kant.
+    final scale = dpr < 2.0 ? 2.0 : dpr;
+    final pw = (lw * scale).round().clamp(64, 1200);
+    final phh = (lh * scale).round().clamp(64, 1200);
     return Image(
       image: _BoxResizeImage(CachedNetworkImageProvider(_sharperUrl(url)), pw, phh, cover: fit == BoxFit.cover),
       width: w,
