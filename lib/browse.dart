@@ -23,6 +23,8 @@ class _BrowsePageState extends State<BrowsePage> {
   }
 
   static const _allId = '__all__';
+  static const _recentId = '__recent__';
+  Set<String> _recentLocked = const {};
   List<Cat>? _cats;
   Cat? _cat;
   List<Item>? _items;
@@ -48,14 +50,21 @@ class _BrowsePageState extends State<BrowsePage> {
       final c = all.where((x) => !vault.contains(x)).toList();
       if (vault.isNotEmpty) c.add(const Cat(Guard.vaultId, Guard.vaultName));
       c.insert(0, const Cat(_allId, 'Alla'));
+      // Serier: snabbval till de man tittat på nyligen (öppnas direkt om det finns några)
+      final hasRecent = widget.kind == Kind.series && _recentFavs().isNotEmpty;
+      if (widget.kind == Kind.series) c.insert(0, const Cat(_recentId, 'Senast kollade'));
       setState(() {
         _vault = vault;
         _cats = c;
       });
-      if (c.length > 1) {
+      if (hasRecent) {
+        _pick(c.first);
+      } else if (c.length > 2 && widget.kind == Kind.series) {
+        _pick(c[2]);
+      } else if (c.length > 1 && widget.kind != Kind.series) {
         _pick(c[1]);
       } else {
-        _pick(c.first);
+        _pick(c.firstWhere((x) => x.id == _allId));
       }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
@@ -73,7 +82,11 @@ class _BrowsePageState extends State<BrowsePage> {
     });
     try {
       final List<Item> it;
-      if (c.id == Guard.vaultId) {
+      if (c.id == _recentId) {
+        final favs = _recentFavs();
+        _recentLocked = {for (final f in favs) if (f.locked) f.id};
+        it = favs.map(itemOf).toList();
+      } else if (c.id == Guard.vaultId) {
         final lists = await Future.wait(_vault.map((v) => widget.api.items(widget.kind, v.id)));
         it = [for (final l in lists) ...l];
         it.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -92,9 +105,23 @@ class _BrowsePageState extends State<BrowsePage> {
     }
   }
 
+  /// Senast kollade serier. Låsta (föräldralås) visas bara när låset är upplåst.
+  List<Fav> _recentFavs() => Store.recentSeries(widget.api.a.id).where((f) => !f.locked || !Guard.active || Guard.unlocked).take(40).toList();
+
   Future<void> _open(Item it) async {
-    await openItem(context, widget.api, it, locked: _inVault);
-    if (mounted) setState(() {});
+    final locked = _inVault || (_cat?.id == _recentId && _recentLocked.contains(it.id));
+    await openItem(context, widget.api, it, locked: locked);
+    if (!mounted) return;
+    // Uppdatera ordningen så att serien man just tittade på hamnar först
+    if (_cat?.id == _recentId) {
+      final favs = _recentFavs();
+      setState(() {
+        _recentLocked = {for (final f in favs) if (f.locked) f.id};
+        _items = favs.map(itemOf).toList();
+      });
+    } else {
+      setState(() {});
+    }
   }
 
   Future<void> _toggleFav(Item it) async {
@@ -133,7 +160,7 @@ class _BrowsePageState extends State<BrowsePage> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(color: sel ? kAccent : (f ? Colors.white24 : kPanel), borderRadius: BorderRadius.circular(9)),
-                  child: Text(cat.id == Guard.vaultId ? '🔒 ${cat.name}' : cat.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, color: Colors.white)),
+                  child: Text(cat.id == Guard.vaultId ? '🔒 ${cat.name}' : cat.id == _recentId ? '🕘 ${cat.name}' : cat.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, color: Colors.white)),
                 ),
               ),
             );
@@ -150,7 +177,8 @@ class _BrowsePageState extends State<BrowsePage> {
             child: _items == null
                 ? const Center(child: CircularProgressIndicator())
                 : items.isEmpty
-                    ? const Center(child: Text('Inget hittades', style: TextStyle(fontSize: 20, color: Colors.white70)))
+                    ? Center(child: Text(_cat?.id == _recentId ? 'Inga serier än.
+Serier du tittar på hamnar här.' : 'Inget hittades', textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, color: Colors.white70)))
                     : GridView.builder(
                         padding: const EdgeInsets.fromLTRB(8, 8, 24, 32),
                         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(

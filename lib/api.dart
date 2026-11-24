@@ -29,7 +29,9 @@ class Episode {
   final int number;
   final String ext;
   final String? image;
-  const Episode(this.id, this.title, this.season, this.number, this.ext, this.image);
+  final String plot;
+  final String duration; // t.ex. "00:42:10"
+  const Episode(this.id, this.title, this.season, this.number, this.ext, this.image, {this.plot = '', this.duration = ''});
 }
 
 class SeriesInfo {
@@ -150,7 +152,9 @@ class Xtream implements Source {
             season,
             _i(e['episode_num']),
             _s(e['container_extension']) ?? 'mkv',
-            info is Map ? _s(info['movie_image']) : null,
+            info is Map ? (_s(info['movie_image']) ?? _s(info['cover_big'])) : null,
+            plot: info is Map ? (_s(info['plot']) ?? _s(info['description']) ?? '') : '',
+            duration: info is Map ? (_s(info['duration']) ?? '') : '',
           ));
     }
 

@@ -254,7 +254,7 @@ class _SettingsPageState extends State<SettingsPage> {
           final mq = MediaQuery.of(c);
           final px = mq.size * mq.devicePixelRatio;
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Version 0.8', style: TextStyle(fontSize: 18, color: Colors.white70)),
+            const Text('Version 0.9', style: TextStyle(fontSize: 18, color: Colors.white70)),
             Text('Skärm: ${px.width.round()}×${px.height.round()} px, täthet ${mq.devicePixelRatio.toStringAsFixed(2)}',
                 style: const TextStyle(fontSize: 14, color: Colors.white54)),
           ]);

@@ -61,7 +61,7 @@ class LoginPage extends StatelessWidget {
         child: SizedBox(
           width: 560,
           child: ListView(shrinkWrap: true, padding: const EdgeInsets.all(24), children: [
-            const Text('Orbit IPTV', style: TextStyle(fontSize: 40, fontWeight: FontWeight.w800), textAlign: TextAlign.center),
+            const Center(child: OrbitLogo(height: 64)),
             const SizedBox(height: 8),
             const Text(
               'Använd bara lagliga tjänster. Orbit är en spelare och levererar inget innehåll.',
@@ -177,9 +177,7 @@ class _HomePageState extends State<HomePage> {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(children: [
-                const Icon(Icons.public, color: kAccent, size: 32),
-                const SizedBox(width: 10),
-                const Text('Orbit', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
+                const OrbitLogo(height: 38),
                 const SizedBox(width: 24),
                 TvButton(label: 'Hem', icon: Icons.home, selected: _tab == Section.home, autofocus: true, focusNode: _homeBtn, onTap: () => setState(() => _tab = Section.home)),
                 const SizedBox(width: 8),

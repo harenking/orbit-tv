@@ -130,14 +130,14 @@ String _sharperUrl(String url) {
   return url.replaceRange(m.start, m.end, '${m.group(1)}w500/');
 }
 
-Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover}) {
+Widget posterImage(String? url, {double? w, double? h, BoxFit fit = BoxFit.cover, int maxW = 1000, int maxH = 1000}) {
   final ph = Container(width: w, height: h, color: Colors.white10, child: const Center(child: Icon(Icons.movie_outlined, color: Colors.white24, size: 40)));
   if (url == null || !url.startsWith('http')) return ph;
   // Som i första versionen: bilden visas i sin fulla upplösning och skalas ner av grafikkretsen
   // (det gav skarpast resultat på TV:n). Bara ovanligt stora bilder (över 1000 px) krymps vid
   // avkodningen så att minnet inte tar slut. Originalet sparas på disk så att det går snabbt nästa gång.
   return Image(
-    image: _BoxResizeImage(CachedNetworkImageProvider(_sharperUrl(url)), 1000, 1000, cover: false),
+    image: _BoxResizeImage(CachedNetworkImageProvider(_sharperUrl(url)), maxW, maxH, cover: false),
     width: w,
     height: h,
     fit: fit,
@@ -438,5 +438,89 @@ class _FocusLineState extends State<FocusLine> {
         child: widget.child,
       ),
     );
+  }
+}
+
+// ---------- Logga ----------
+const kLogoA = Color(0xFF5B7CFF);
+const kLogoB = Color(0xFFB45CFF);
+const kLogoC = Color(0xFFFF6FB1);
+
+/// Orbit-märket: en omloppsbana i lila gradient med en lysande satellit och en play-symbol i mitten.
+class OrbitMark extends StatelessWidget {
+  final double size;
+  const OrbitMark({super.key, this.size = 40});
+  @override
+  Widget build(BuildContext context) => SizedBox(width: size, height: size, child: CustomPaint(painter: _OrbitPainter()));
+}
+
+class _OrbitPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final s = size.shortestSide;
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = s * 0.39;
+    final stroke = s * 0.115;
+    final rect = Rect.fromCircle(center: c, radius: r);
+    // Banan med en öppning uppe till höger där satelliten sitter
+    const sat = -math.pi / 4;
+    const gap = 0.95;
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round
+      ..shader = const LinearGradient(begin: Alignment.bottomLeft, end: Alignment.topRight, colors: [kLogoA, kLogoB, kLogoC]).createShader(rect);
+    canvas.drawArc(rect, sat + gap / 2, 2 * math.pi - gap, false, ring);
+    // Play-symbol, något åt höger för att se centrerad ut
+    final h = r * 0.95;
+    final cx = c.dx + r * 0.08;
+    final tri = Path()
+      ..moveTo(cx - h * 0.38, c.dy - h * 0.5)
+      ..lineTo(cx + h * 0.52, c.dy)
+      ..lineTo(cx - h * 0.38, c.dy + h * 0.5)
+      ..close();
+    canvas.drawPath(
+        tri,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.fill);
+    canvas.drawPath(
+        tri,
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = s * 0.05
+          ..strokeJoin = StrokeJoin.round);
+    // Satellit med glöd
+    final p = c + Offset(math.cos(sat) * r, math.sin(sat) * r);
+    canvas.drawCircle(p, stroke * 1.1, Paint()..color = kLogoC.withAlpha(110)..maskFilter = MaskFilter.blur(BlurStyle.normal, stroke * 0.6));
+    canvas.drawCircle(p, stroke * 0.62, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Märket + ordbilden "Orbit TV".
+class OrbitLogo extends StatelessWidget {
+  final double height;
+  const OrbitLogo({super.key, this.height = 40});
+  @override
+  Widget build(BuildContext context) {
+    final fs = height * 0.72;
+    return Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
+      OrbitMark(size: height),
+      SizedBox(width: height * 0.28),
+      Text('Orbit', style: TextStyle(fontSize: fs, fontWeight: FontWeight.w800, letterSpacing: -0.5, color: Colors.white, height: 1)),
+      SizedBox(width: height * 0.16),
+      Container(
+        padding: EdgeInsets.symmetric(horizontal: height * 0.16, vertical: height * 0.05),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(height * 0.14),
+          gradient: const LinearGradient(colors: [kLogoA, kLogoB, kLogoC]),
+        ),
+        child: Text('TV', style: TextStyle(fontSize: fs * 0.48, fontWeight: FontWeight.w900, letterSpacing: 1, color: Colors.white, height: 1.1)),
+      ),
+    ]);
   }
 }

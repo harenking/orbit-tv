@@ -329,6 +329,45 @@ class Store {
     await _p.setStringList('watched', l);
   }
 
+  // ---------- Senast kollade serier ----------
+  /// Serier man spelat avsnitt i, senast först (per konto). Fyller även på med
+  /// serier från tittarhistoriken så att listan inte är tom efter uppdateringen.
+  static List<Fav> recentSeries(String accId) {
+    final out = <Fav>[];
+    final seen = <String>{};
+    final times = <String, int>{};
+    try {
+      final s = _p.getString('recentSeries');
+      if (s != null) {
+        for (final j in jsonDecode(s) as List) {
+          final f = Fav.fromJson(Map<String, dynamic>.from(j as Map));
+          if (f.accId != accId || !seen.add(f.id)) continue;
+          out.add(f);
+          times[f.id] = ((j['t'] as num?) ?? 0).toInt();
+        }
+      }
+    } catch (_) {}
+    for (final p in _all().values) {
+      final ep = p.ep;
+      if (ep == null || ep.seriesId.isEmpty || !seen.add(ep.seriesId)) continue;
+      out.add(Fav(accId: accId, kind: 'series', id: ep.seriesId, name: ep.series, poster: ep.poster, locked: p.locked));
+      times[ep.seriesId] = p.updated;
+    }
+    out.sort((a, b) => (times[b.id] ?? 0).compareTo(times[a.id] ?? 0));
+    return out;
+  }
+
+  static Future<void> touchSeries(Fav f) async {
+    List l = [];
+    try {
+      l = jsonDecode(_p.getString('recentSeries') ?? '[]') as List;
+    } catch (_) {}
+    l.removeWhere((j) => j is Map && j['acc'] == f.accId && j['id'] == f.id);
+    l.insert(0, {...f.toJson(), 't': DateTime.now().millisecondsSinceEpoch});
+    if (l.length > 60) l = l.sublist(0, 60);
+    await _p.setString('recentSeries', jsonEncode(l));
+  }
+
   /// Senast spelade avsnitt (nyckel e:<id>) per serie.
   static String? lastEp(String seriesId) => _p.getString('lastEp:$seriesId');
   static Future<void> setLastEp(String seriesId, String key) => _p.setString('lastEp:$seriesId', key);

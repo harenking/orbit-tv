@@ -118,7 +118,12 @@ class _PlayerPageState extends State<PlayerPage> {
     }
     _subs.add(player.stream.position.listen((p) {
       if (!mounted) return;
-      setState(() => _pos = p);
+      // mpv skickar positionen många gånger per sekund. Att rita om hela sidan varje gång tar
+      // kraft från TV:ns grafikkrets (som också ska visa videon) och ger tappade bildrutor.
+      // Tiden visas i hela sekunder, så det räcker att rita om när sekunden ändras.
+      final changed = p.inSeconds != _pos.inSeconds;
+      _pos = p;
+      if (changed) setState(() {});
     }));
     _subs.add(player.stream.duration.listen((d) {
       if (!mounted) return;

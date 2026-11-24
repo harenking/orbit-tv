@@ -46,6 +46,8 @@ class _SeriesPageState extends State<SeriesPage> {
   void _play(Episode e) {
     final all = flatEpisodes(_info!);
     final i = all.indexWhere((x) => x.id == e.id);
+    final it = widget.item;
+    Store.touchSeries(Fav(accId: widget.api.a.id, kind: 'series', id: it.id, name: it.name, poster: it.poster, ext: it.ext, locked: widget.locked));
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => episodePlayer(widget.api, widget.item, all, i < 0 ? 0 : i, locked: widget.locked))).then((_) {
       if (mounted) setState(() {});
     });
@@ -132,25 +134,59 @@ class _SeriesPageState extends State<SeriesPage> {
                     final p = Store.progress(key);
                     final watched = Store.isWatched(key);
                     final isCur = key == cur;
+                    final showProg = p != null && p.durSec > 0 && p.posSec > 10 && p.posSec < p.durSec * 0.95;
+                    final len = _fmtDuration(e.duration);
                     return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      padding: const EdgeInsets.symmetric(vertical: 4),
                       child: Tv(
                         onTap: () => _play(e),
                         builder: (c, f) => Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             color: f ? Colors.white24 : (isCur ? kAccent.withAlpha(60) : kPanel),
-                            borderRadius: BorderRadius.circular(9),
+                            borderRadius: BorderRadius.circular(10),
                             border: isCur ? Border.all(color: kAccent, width: 2) : null,
                           ),
-                          child: Row(children: [
-                            SizedBox(width: 56, child: Text('${e.number}', style: const TextStyle(fontSize: 20, color: Colors.white70))),
-                            if (isCur) const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.play_circle, color: kAccent, size: 22)),
-                            Expanded(child: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 20, color: Colors.white))),
-                            if (p != null && p.durSec > 0 && p.posSec > 10 && p.posSec < p.durSec * 0.95)
-                              Text('Fortsätt ${fmtTime(p.posSec)}', style: const TextStyle(fontSize: 16, color: kAccent))
-                            else if (watched)
-                              const Row(children: [Icon(Icons.check_circle, color: Colors.white54, size: 20), SizedBox(width: 6), Text('Sett', style: TextStyle(fontSize: 16, color: Colors.white54))]),
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                            // Bild från avsnittet (eller seriens affisch om servern saknar den)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(7),
+                              child: SizedBox(
+                                width: 176,
+                                height: 99,
+                                child: Stack(fit: StackFit.expand, children: [
+                                  posterImage(e.image ?? widget.item.poster, maxW: 480, maxH: 270),
+                                  if (watched && !showProg)
+                                    Container(color: Colors.black45, child: const Center(child: Icon(Icons.check_circle, color: Colors.white, size: 34))),
+                                  if (isCur) const Center(child: Icon(Icons.play_circle_fill, color: Colors.white, size: 40)),
+                                  if (showProg)
+                                    Align(
+                                      alignment: Alignment.bottomCenter,
+                                      child: LinearProgressIndicator(value: (p!.posSec / p!.durSec).clamp(0.0, 1.0), minHeight: 5, color: kAccent, backgroundColor: Colors.black54),
+                                    ),
+                                ]),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                                Row(children: [
+                                  Text('${e.number}. ', style: const TextStyle(fontSize: 19, color: Colors.white70, fontWeight: FontWeight.w700)),
+                                  Expanded(child: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 19, color: Colors.white, fontWeight: FontWeight.w700))),
+                                  if (len.isNotEmpty) Padding(padding: const EdgeInsets.only(left: 10), child: Text(len, style: const TextStyle(fontSize: 15, color: Colors.white54))),
+                                ]),
+                                if (e.plot.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(e.plot, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, color: Colors.white60, height: 1.25)),
+                                  ),
+                                const SizedBox(height: 4),
+                                if (showProg)
+                                  Text('Fortsätt ${fmtTime(p!.posSec)}', style: const TextStyle(fontSize: 15, color: kAccent))
+                                else if (watched)
+                                  const Text('Sett', style: TextStyle(fontSize: 15, color: Colors.white54)),
+                              ]),
+                            ),
                           ]),
                         ),
                       ),
@@ -164,4 +200,20 @@ class _SeriesPageState extends State<SeriesPage> {
       ),
     );
   }
+}
+
+/// "00:42:10" eller "2530" (sekunder) -> "42 min".
+String _fmtDuration(String d) {
+  final t = d.trim();
+  if (t.isEmpty) return '';
+  int secs;
+  if (t.contains(':')) {
+    final p = t.split(':').map((x) => int.tryParse(x) ?? 0).toList();
+    secs = p.fold(0, (a, b) => a * 60 + b);
+  } else {
+    secs = int.tryParse(t) ?? 0;
+  }
+  if (secs < 60) return '';
+  final h = secs ~/ 3600, m = (secs % 3600) ~/ 60;
+  return h > 0 ? '$h h ${m.toString().padLeft(2, '0')} min' : '$m min';
 }

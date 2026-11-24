@@ -66,6 +66,7 @@ Future<void> openProgress(BuildContext context, Source api, Progress p) async {
       final all = flatEpisodes(info);
       final i = all.indexWhere((e) => 'e:${e.id}' == p.key);
       if (i >= 0) {
+        Store.touchSeries(Fav(accId: api.a.id, kind: 'series', id: ep.seriesId, name: ep.series, poster: ep.poster, locked: p.locked));
         await nav.push(MaterialPageRoute(builder: (_) => episodePlayer(api, Item(Kind.series, ep.seriesId, ep.series, ep.poster, ''), all, i, locked: p.locked)));
         return;
       }
